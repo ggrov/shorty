@@ -22,9 +22,8 @@ namespace shorty
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
                 Logger logger = new Logger(writer, programs);
-                logger.RunTests();
+                logger.LogAllData();
             }
-
         }
 
         private static void Main(string[] args)
@@ -49,7 +48,7 @@ namespace shorty
                 if (fileName.EndsWith("\\*") || fileName.EndsWith("/*")) {
                     string[] newFileNames = Directory.GetFiles(fileName.Substring(0, fileName.Length - 1));
                     foreach (string newFileName in newFileNames) {
-                        if(newFileName.EndsWith(".dfy"))
+                        if (newFileName.EndsWith(".dfy"))
                             fileNames.Add(newFileName);
                     }
                 }
@@ -61,12 +60,10 @@ namespace shorty
                 }
             }
 
-            foreach(string fileName in fileNames) {
-
+            foreach (string fileName in fileNames) {
                 Console.WriteLine("Filename: " + fileName);
 
-                if (!fileName.EndsWith(".dfy"))
-                {
+                if (!fileName.EndsWith(".dfy")) {
                     Console.WriteLine("Error: file must be a .dfy file");
                     continue;
                 }
@@ -74,20 +71,19 @@ namespace shorty
 
                 //create program from file
                 int nameStart = fileName.LastIndexOf('\\') + 1;
-                string programName = fileName.Substring(nameStart, fileName.Length-nameStart);
+                string programName = fileName.Substring(nameStart, fileName.Length - nameStart);
 
                 ModuleDecl module = new LiteralModuleDecl(new DefaultModuleDecl(), null);
                 var builtIns = new BuiltIns();
                 Parser.Parse(fileName, module, builtIns, new Errors());
 
                 dafnyPrograms.Add(new Program(programName, module, builtIns));
-
             }
 
             Console.WriteLine("1: standard run\n2: run logger");
             string input = Console.ReadLine();
             int ans;
-            if(!Int32.TryParse(input, out ans)) {
+            if (!Int32.TryParse(input, out ans)) {
                 return;
             }
             else if (ans < 1 || ans > 2) {
@@ -100,7 +96,6 @@ namespace shorty
             }
 
 
-
             //setup shorty and test the files
             Dictionary<Program, List<AssertStmt>> removeableAsserts = new Dictionary<Program, List<AssertStmt>>();
             Dictionary<Program, List<MaybeFreeExpression>> removeableInvariants = new Dictionary<Program, List<MaybeFreeExpression>>();
@@ -110,7 +105,7 @@ namespace shorty
             List<Program> failedAssertRemovalPrograms = new List<Program>();
 
             // Time analysis
-            Dictionary<Program, long> times = new Dictionary<Program,long>();
+            Dictionary<Program, long> times = new Dictionary<Program, long>();
             Stopwatch sw = new Stopwatch();
 
             // Run all the programs
@@ -145,8 +140,7 @@ namespace shorty
 
                 Console.WriteLine("Finding unnecessary loop invariants");
                 List<Expression> decreases = shorty.FindRemoveableDecreases();
-                if (decreases == null)
-                {
+                if (decreases == null) {
                     Console.WriteLine("Finding decreases failed");
                     break;
                 }
@@ -158,8 +152,7 @@ namespace shorty
                     break;
                 }
 
-                if (!shorty.IsProgramValid())
-                {
+                if (!shorty.IsProgramValid()) {
                     Console.WriteLine("\n\n at end and somehow failed!!!!\n\n");
                     failedInitialValidationPrograms.Add(program);
                 }
@@ -176,19 +169,18 @@ namespace shorty
                 using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied-" + program.FullName)) {
                     shorty.PrintProgram(writer);
                 }
-
             }
 
             Console.WriteLine("\n\nRemoveable asserts and invariants for each program:");
             foreach (Program program in removeableAsserts.Keys) {
                 float time = times[program]/1000f;
-                Console.WriteLine(program.FullName + " - running time: " + time +"s " );
+                Console.WriteLine(program.FullName + " - running time: " + time + "s ");
                 string asserts = "";
                 foreach (AssertStmt assert in removeableAsserts[program]) {
                     asserts = (asserts + " (" + assert.Tok.line + "," + assert.Tok.col + "),");
                 }
-                if(removeableAsserts[program].Count > 0)
-                    asserts = "Asserts:" + asserts.Substring(0, asserts.Length-1); //remove last comma
+                if (removeableAsserts[program].Count > 0)
+                    asserts = "Asserts:" + asserts.Substring(0, asserts.Length - 1); //remove last comma
                 else {
                     asserts = "No asserts were removed.";
                 }
@@ -222,7 +214,7 @@ namespace shorty
                 else {
                     lemmaCalls = "No lemma calls were removed";
                 }
-                
+
                 Console.WriteLine(asserts + "\n");
                 Console.WriteLine(invariants + "\n");
                 Console.WriteLine(decreaseses + "\n");
@@ -238,8 +230,6 @@ namespace shorty
             foreach (Program program in failedAssertRemovalPrograms) {
                 Console.Write(program.FullName + " | ");
             }
-            Console.WriteLine("\nElapsed Time: " + (DateTime.Now - Process.GetCurrentProcess().StartTime));
-
             Console.Read();
         }
     }
