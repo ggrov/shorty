@@ -16,6 +16,8 @@ namespace shorty
     {
         //Asserts
         public readonly Dictionary<Statement, List<AssertStmt>> asserts = new Dictionary<Statement, List<AssertStmt>>();
+
+        public readonly Dictionary<Method, List<Tuple<AssertStmt, Statement>>> assertsParents = new Dictionary<Method, List<Tuple<AssertStmt, Statement>>>();
         //Dictionary<Method, Dictionary<AssertStmt, Statement>>;
 
         List<AssertStmt> assertsToKeep = new List<AssertStmt>();
@@ -53,15 +55,6 @@ namespace shorty
             Contract.Requires(program != null);
             this.mode = mode;
             this.program = program;
-
-            var resolver = new Resolver(program);
-            try {
-                resolver.ResolveProgram(program);
-            }
-            catch {
-                Console.WriteLine("Failed to resolve program");
-            }
-
             FindRemovables();
         }
 
@@ -134,9 +127,9 @@ namespace shorty
 
         private void FindRemovables()
         {
-            foreach (var module in program.Modules) {
+            //foreach (var module in program.Modules) {
                 //look through each module...
-                foreach (var decl in module.TopLevelDecls) {
+                foreach (var decl in program.DefaultModuleDef.TopLevelDecls) {
                     //lookthrough all TopDeclaration...
                     if (decl is ClassDecl) {
                         //we need to look through classes to find members which might contain allAsserts
@@ -146,7 +139,7 @@ namespace shorty
                         }
                     }
                 }
-            }
+            //}
         }
 
         private void CheckMember(MemberDecl member)
@@ -175,9 +168,16 @@ namespace shorty
             if (statement is AssertStmt) {
                 //If the parent is in the dictionary, add the assert to the parent.  Otherwise, add it aswell as the item in a new list.
                 AssertStmt assert = (AssertStmt) statement;
+                
+                if (!assertsParents.ContainsKey(method)) {
+                    assertsParents.Add(method, new List<Tuple<AssertStmt, Statement>>());
+                }
+
+                assertsParents[method].Add(new Tuple<AssertStmt, Statement>(assert, parent));
                 if (asserts.ContainsKey(parent)) {
-                    if (!asserts[parent].Contains(statement))
+                    if (!asserts[parent].Contains(statement)) {
                         asserts[parent].Add((AssertStmt) statement);
+                    }
                 }
                 else {
                     asserts.Add(parent, new List<AssertStmt> {(AssertStmt) statement});
@@ -436,6 +436,74 @@ namespace shorty
             }
         }
 
+        public Dictionary<Method, List<List<AssertStmt>>> TestDifferentRemovals()
+        {
+            Dictionary<Method, List<List<AssertStmt>>> returnData = new Dictionary<Method, List<List<AssertStmt>>>();
+
+   
+            foreach (Method method in assertsParents.Keys) {
+                List<List<AssertStmt>> solutions = new List<List<AssertStmt>>();
+                TestRemovals(0, true, solutions, new List<AssertStmt>(), method);
+                returnData.Add(method, solutions);
+            }
+            return returnData;
+        }
+
+        private void TestRemovals(int index, bool first, List<List<AssertStmt>> solutions, List<AssertStmt> currentSolution, Method method)
+        {
+            if (index == assertsParents[method].Count) {
+                solutions.Add(new List<AssertStmt>(currentSolution));
+                return;
+            }
+
+            var parent = assertsParents[method][index].Item2;
+            var assert = assertsParents[method][index].Item1;
+
+            if (parent is BlockStmt) {
+                var block = (BlockStmt) parent;
+                int assertPos = block.Body.IndexOf(assert);
+                block.Body.Remove(assert);
+                if (IsProgramValid()) {
+                    var newCurrentSolution = new List<AssertStmt>(currentSolution) {assert}; //create a copy of the currentSolution and add in the assert
+                    TestRemovals(index+1, first, solutions, newCurrentSolution, method);
+                    block.Body.Insert(assertPos, assert);
+                    TestRemovals(index+1, false, solutions, currentSolution, method);
+                }
+                else {
+                    block.Body.Insert(assertPos, assert);
+                    TestRemovals(index + 1, first, solutions, currentSolution, method);
+                }
+
+            }
+            else if (parent is MatchStmt) {
+                var matchStmt = (MatchStmt) parent;
+                bool found = false;
+                foreach (var matchCase in matchStmt.Cases) {
+                    if (matchCase.Body.Contains(assert)) {
+                        found = true;
+                        int assertPos = matchCase.Body.IndexOf(assert);
+                        matchCase.Body.Remove(assert);
+                        if (IsProgramValid())
+                        {
+                            var newCurrentSolution = new List<AssertStmt>(currentSolution) { assert }; //create a copy of the currentSolution and add in the assert
+                            TestRemovals(index + 1, first, solutions, newCurrentSolution, method);
+                            matchCase.Body.Insert(assertPos, assert);
+                            TestRemovals(index + 1, false, solutions, currentSolution, method);
+                        }
+                        else
+                        {
+                            matchCase.Body.Insert(assertPos, assert);
+                            TestRemovals(index + 1, first, solutions, currentSolution, method);
+                        }
+                    }
+                }
+                if (!found) {
+                    throw new Exception("assert not found in match case");
+                }
+
+            }
+        }
+
         public List<AssertStmt> FindUnnecessaryAsserts()
         {
             if (!IsProgramValid()) {
@@ -616,23 +684,45 @@ namespace shorty
 //                    token.col);
             }
         }
+        
+        private Program CloneProgram(Program program)
+        {
+            var cloner = new Cloner();
+            var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
+            return new Program(program.FullName, moduleDecl, program.BuiltIns);
+        }
 
         public bool IsProgramValid()
         {
             Contract.Requires(program != null);
             string programId = "main_program_id";
             Bpl.PipelineStatistics stats = new Bpl.PipelineStatistics();
-            ;
 
             var translator = new Translator();
-            Bpl.Program boogieProgram;
-            try {
-                boogieProgram = translator.Translate(program);
+            Program programCopy = CloneProgram(program);
+
+            var resolver = new Resolver(programCopy);
+            try
+            {
+                resolver.ResolveProgram(programCopy);
             }
-            catch {
-                Console.WriteLine("Program " + program.FullName + "failed to translate.");
+            catch
+            {
+                Console.WriteLine("Failed to resolve program");
                 return false;
             }
+
+            Bpl.Program boogieProgram;
+            try {
+                boogieProgram = translator.Translate(programCopy);
+            }
+            catch {
+                Console.WriteLine("Program " + programCopy.FullName + "failed to translate.");
+                return false;
+            }
+
+           
+
             var bplFileName = "bplFile";
             Bpl.LinearTypeChecker ltc;
             Bpl.MoverTypeChecker mtc;

@@ -20,10 +20,30 @@ namespace shorty
 
         static void RunLogger(List<Program> programs)
         {
-            //using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
-            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
+            using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
+            //using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
                 Logger logger = new Logger(writer, programs);
                 logger.LogAllData();
+            }
+        }
+
+        static void RunTest(List<Program> programs)
+        {
+            using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
+                foreach (var program in programs) {
+                    Shorty shorty = new Shorty(program, Shorty.Mode.Singular);
+                    Dictionary<Method,List<List<AssertStmt>>> solutions = shorty.TestDifferentRemovals();
+
+                    foreach (Method method in solutions.Keys) {
+                        int i = 0;
+                        writer.WriteLine("Method: "+method.Name);
+                        foreach (var asserts in solutions[method]) {
+                            writer.WriteLine("Solution " + ++i + " | length " + asserts.Count);
+                        }
+                    }
+
+
+                }
             }
         }
 
@@ -32,8 +52,8 @@ namespace shorty
             Contract.Requires(args != null);
             //Setup environment
             DafnyOptions.Install(new DafnyOptions());
-            //Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            //Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             printer = new Bpl.ConsolePrinter();
@@ -88,7 +108,7 @@ namespace shorty
             if (!Int32.TryParse(input, out ans)) {
                 return;
             }
-            else if (ans < 1 || ans > 2) {
+            else if (ans < 1 || ans > 3) {
                 return;
             }
 
@@ -96,7 +116,11 @@ namespace shorty
                 RunLogger(dafnyPrograms);
                 return;
             }
-
+            if (ans == 3) {
+                RunTest(dafnyPrograms);
+                Console.ReadLine();
+                return;
+            }
 
             //setup shorty and test the files
             Dictionary<Program, List<AssertStmt>> removeableAsserts = new Dictionary<Program, List<AssertStmt>>();
@@ -168,8 +192,8 @@ namespace shorty
                 removableLemmaCalls.Add(program, lemmaCalls);
                 sw.Stop();
                 times.Add(program, sw.ElapsedMilliseconds);
-//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied-" + program.FullName)) {
-                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
+                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied-" + program.FullName)) {
+//                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
                     shorty.PrintProgram(writer);
                 }
             }
