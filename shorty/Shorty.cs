@@ -7,6 +7,7 @@ using System.IO;
 using System.Linq;
 using System.Management.Instrumentation;
 using System.Net.Configuration;
+using System.Reflection.Emit;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 
@@ -16,6 +17,8 @@ namespace shorty
     {
         //Asserts
         public readonly Dictionary<Statement, List<AssertStmt>> asserts = new Dictionary<Statement, List<AssertStmt>>();
+        public readonly Dictionary<Statement, List<AssertStmt>> andAsserts = new Dictionary<Statement, List<AssertStmt>>();
+
 
         public readonly Dictionary<Method, List<Tuple<AssertStmt, Statement>>> assertsParents = new Dictionary<Method, List<Tuple<AssertStmt, Statement>>>();
         //Dictionary<Method, Dictionary<AssertStmt, Statement>>;
@@ -27,10 +30,6 @@ namespace shorty
         List<MatchCaseStmt> errorMatches = new List<MatchCaseStmt>();
         Dictionary<AssertStmt, Statement> removedParentsDictionary = new Dictionary<AssertStmt, Statement>();
         Dictionary<AssertStmt, MatchCaseStmt> removedCaseStmts = new Dictionary<AssertStmt, MatchCaseStmt>();
-
-        public bool BreakDownExpressions { get; set; }
-
-        public Tuple<List<AssertStmt>, Dictionary<AssertStmt, AssertStmt>> 
 
         // Modes:
         // All removes all asserts at once and then tries to reinsert them based on the error message - it does not always 100% succesed
@@ -60,7 +59,6 @@ namespace shorty
             this.mode = mode;
             this.program = program;
             FindRemovables();
-            BreakDownExpressions = true;
         }
 
         public void PrintAsserts()
@@ -177,7 +175,6 @@ namespace shorty
                 if (!assertsParents.ContainsKey(method)) {
                     assertsParents.Add(method, new List<Tuple<AssertStmt, Statement>>());
                 }
-
                 assertsParents[method].Add(new Tuple<AssertStmt, Statement>(assert, parent));
                 if (asserts.ContainsKey(parent)) {
                     if (!asserts[parent].Contains(statement)) {
@@ -186,6 +183,18 @@ namespace shorty
                 }
                 else {
                     asserts.Add(parent, new List<AssertStmt> {(AssertStmt) statement});
+                }
+
+                //If the assert is an AND operator, add it to the andAsserts
+                if (assert.Expr is BinaryExpr) {
+                    var binExpr = (BinaryExpr) assert.Expr;
+                    if (binExpr.Op == BinaryExpr.Opcode.And) {
+                        if (!andAsserts.ContainsKey(parent)) {
+                            andAsserts.Add(parent, new List<AssertStmt>());
+                        }
+
+                        andAsserts[parent].Add(assert);
+                    }
                 }
             }
             else if (statement is BlockStmt) {
@@ -486,6 +495,65 @@ namespace shorty
             }
         }
 
+        public List<Tuple<AssertStmt, AssertStmt>> GetSimplifiedAsserts()
+        {
+            var simplifiedAsserts = new List<Tuple<AssertStmt, AssertStmt>>();
+
+            foreach (Statement stmnt in andAsserts.Keys) {
+                if (!(stmnt is BlockStmt)) continue;
+                var bl = (BlockStmt) stmnt;
+                foreach (AssertStmt assert in asserts[stmnt]) {
+                    int index = bl.Body.IndexOf(assert);
+                    bl.Body.Remove(assert);
+                    if (!IsProgramValid()) {
+                        //Break down the asserts
+                        var brokenAsserts = BreakDownExpr(assert);
+                        //Add them back in
+                        foreach (var brokenAssert in brokenAsserts) {
+                            bl.Body.Insert(index, brokenAssert);                                
+                        }
+                        brokenAsserts.Reverse();
+                        //Test to see which can be removed
+                        for (int i = brokenAsserts.Count-1; i >= 0; i--) {
+                            int j = bl.Body.IndexOf(brokenAsserts[i]);
+                            bl.Body.Remove(brokenAsserts[i]);
+                            if (IsProgramValid()) {
+                                brokenAsserts.Remove(brokenAsserts[i]); //Item was removed successfully
+                            }
+                            else {
+                                bl.Body.Insert(j, brokenAsserts[i]); //Item could not be removed - reinsert
+                            }
+                        }
+                        simplifiedAsserts.Add(new Tuple<AssertStmt, AssertStmt>(assert, CombineAsserts(brokenAsserts)));
+                    }
+                    else {
+                        Console.WriteLine("Item can be completely removed separately");
+                    }
+                }
+            }
+
+            return simplifiedAsserts;
+        }
+
+        private AssertStmt CombineAsserts(List<AssertStmt> brokenAsserts)
+        {
+            if (brokenAsserts.Count < 1)
+            {
+                return null;
+            }
+            if (brokenAsserts.Count == 1)
+                return brokenAsserts[0];
+
+            var assert = brokenAsserts[0];
+            brokenAsserts.Remove(assert);
+            //Need to do combine attributes somehow?
+            Expression left = brokenAsserts[0].Expr;
+            Expression right = CombineAsserts(brokenAsserts).Expr;
+            BinaryExpr binExpr = new BinaryExpr(left.tok, BinaryExpr.Opcode.And, left, right);
+            AssertStmt newAssert = new AssertStmt(assert.Tok, assert.EndTok, binExpr, assert.Attributes);
+            return newAssert;
+        }
+
         /// <summary>
         /// Breaks down an assert statement based off of && operators
         /// </summary>
@@ -498,7 +566,7 @@ namespace shorty
                 BinaryExpr expr = (BinaryExpr)assert.Expr;
                 if (expr.Op == BinaryExpr.Opcode.And) {//or or statements or anything else???
                     AssertStmt newAssert = new AssertStmt(expr.tok, assert.EndTok, expr.E0, assert.Attributes);
-                    AssertStmt newAssert2 = new AssertStmt(expr.tok, assert.EndTok, expr.E0, assert.Attributes);
+                    AssertStmt newAssert2 = new AssertStmt(expr.tok, assert.EndTok, expr.E1, assert.Attributes);
 
                     brokenAsserts.AddRange(BreakDownExpr(newAssert));
                     brokenAsserts.AddRange(BreakDownExpr(newAssert2));
@@ -523,14 +591,7 @@ namespace shorty
                 //as it goes method
                 else if (mode == Mode.Singular) {
                     if (!IsProgramValid()) {
-                        var brokenAsserts = BreakDownExpr(assert);
-                        if (brokenAsserts.Count == 1) {
-                            block.Body.Insert(index, assert);
-                        }
-                        else {
-                            //The assert has been broken down into multiple parts
-
-                        }
+                        block.Body.Insert(index, assert);
                     }
                     else if (!removedParentsDictionary.ContainsKey(assert)) {
                         removedParentsDictionary.Add(assert, block);
