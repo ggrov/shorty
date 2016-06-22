@@ -11,7 +11,7 @@ namespace shorty
     {
         private readonly TextWriter _tw;
         private readonly List<Program> _programs;
-        private readonly int _numberOfTests = 1;
+        private readonly int _numberOfTests = 2;
 
         public Logger(TextWriter tw, List<Program> programs, int numberOfTest)
         {
@@ -41,21 +41,21 @@ namespace shorty
 
             //Assertions
             _tw.WriteLine("Assert Removal");
-            _tw.WriteLine("Program Name, Asserts Before, Asserts After, Asserts Removed, Removal Percentage, Average Execution Time(ms)");
+            _tw.WriteLine("Program Name, Asserts Before, Asserts After, Asserts Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Verification Time Improvement");
 
             var assertData = AssertRemoval();
             LogTupleListData(assertData);
 
             //Invariants
             _tw.WriteLine("\nInvariant Removal");
-            _tw.WriteLine("Program Name, Invariants Before, Invariants After, Invariants Removed, Average Execution Time(ms)");
+            _tw.WriteLine("Program Name, Invariants Before, Invariants After, Invariants Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Average Verification Time Improvement");
 
             var invariantData = InvariantRemoval();
             LogTupleListData(invariantData);
 
             //Lemma Call
             _tw.WriteLine("\nLemma Call Removal");
-            _tw.WriteLine("Program Name, Lemma Calls Before, Lemma Calls After, Lemma Calls Removed, Average Execution Time(ms)");
+            _tw.WriteLine("Program Name, Lemma Calls Before, Lemma Calls After, Lemma Calls Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Average Verification Time Improvement");
 
             var lemmaCallData = LemmaCallRemoval();
             LogTupleListData(lemmaCallData);
@@ -63,18 +63,20 @@ namespace shorty
 
             //Decreases
             _tw.WriteLine("Decreases Removal");
-            _tw.WriteLine("\nProgram Name, Decreaseses Before, Decreases After, Decreaseses Removed, Average Execution Time(ms)");
+            _tw.WriteLine("\nProgram Name, Decreaseses Before, Decreases After, Decreaseses Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Average Verification Time Improvement");
 
             var decreasesData = DecreasesRemoval();
             LogTupleListData(decreasesData);
         }
 
-        private void LogTupleListData(List<Tuple<string, int, int, float>> data)
+        private void LogTupleListData(List<Tuple<string, int, int, float, float, float>> data)
         {
             var totalBefore = 0;
             var totalRemoved = 0;
             var totalAfter = 0;
             float totalTime = 0;
+            float totalVerTimeBefore = 0;
+            float totalVerTimeAfter = 0;
 
             foreach (var tuple in data) {
                 var name = tuple.Item1;
@@ -82,23 +84,42 @@ namespace shorty
                 var removed = tuple.Item3;
                 var after = before - removed;
                 var percentage = 100f - ((float) after/(float) before)*100f;
-                var time = tuple.Item4;
+                var executionTime = tuple.Item4;
+                var verTimeBefore = tuple.Item5;
+                var verTimeAfter = tuple.Item6;
+                var verTimeImprovement = verTimeBefore - verTimeAfter;
 
-                _tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}", name, before, after, removed, percentage + "%", time);
+                _tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}", name, before, after, removed, percentage + "%", executionTime, verTimeBefore, verTimeAfter, verTimeImprovement);
 
                 totalBefore += before;
                 totalRemoved += removed;
                 totalAfter += after;
-                totalTime += time;
+                totalTime += executionTime;
+                totalVerTimeBefore += verTimeBefore;
+                totalVerTimeAfter += verTimeAfter;
             }
 
             var overAllPercentage = 100f - ((float) totalAfter/(float) totalBefore)*100;
-            _tw.WriteLine("Total, {0}, {1}, {2}, {3}, {4}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%", totalTime);
+            var totalVerTimeImprovement = totalVerTimeBefore - totalVerTimeAfter;
+            _tw.WriteLine("Total, {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%",
+                totalTime, totalVerTimeBefore, totalVerTimeAfter, totalVerTimeImprovement);
+            _tw.WriteLine(",,,,,,,Avg ver Time Improvement:,{0}", totalVerTimeImprovement/_programs.Count);
         }
 
-        public List<Tuple<string, int, int, float>> AssertRemoval()
+        public long FindExecutionTime(Program program)
         {
-            var assertData = new List<Tuple<string, int, int, float>>();
+            Shorty shorty = new Shorty(CloneProgram(program), Shorty.Mode.Singular);
+            Stopwatch watch = new Stopwatch();
+            watch.Start();
+            if (!shorty.IsProgramValid())
+                return -1;
+            watch.Stop();
+            return watch.ElapsedMilliseconds;
+        }
+
+        public List<Tuple<string, int, int, float, float, float>> AssertRemoval()
+        {
+            var assertData = new List<Tuple<string, int, int, float, float, float>>();
 
             foreach (var program in _programs) {
                 Console.WriteLine("\nRemoving Asserts from {0}", program.FullName);
@@ -106,9 +127,16 @@ namespace shorty
                 var assertsRemoved = 0;
                 float averageExecutionTime = 0;
                 var valid = true;
+                float averageTimeBefore = 0;
+                float averageTimeAfter = 0;
+
                 // Run each test and add up the time of each one so the average can be found
                 for (var i = 0; i < _numberOfTests; i++) {
-                    var shorty = new Shorty(CloneProgram(program), Shorty.Mode.Singular);
+                    var programClone = CloneProgram(program);
+                    var shorty = new Shorty(programClone, Shorty.Mode.Singular);
+
+                    averageTimeBefore += FindExecutionTime(programClone);
+                    
                     if (i == 0) {
                         //Find out how many asserts were in the program before the removal - only do on first run
                         foreach (var stmt in shorty.asserts.Keys) {
@@ -133,21 +161,26 @@ namespace shorty
                     if (i == 0) {
                         assertsRemoved = asserts.Count;
                     }
+
+                    averageTimeAfter += FindExecutionTime(programClone);
                 }
 
                 if (!valid)
                     continue;
-
+                
                 //Calculate average execution time and
                 averageExecutionTime = averageExecutionTime/_numberOfTests;
-                assertData.Add(new Tuple<string, int, int, float>(program.FullName, assertsBefore, assertsRemoved, averageExecutionTime));
+                averageTimeBefore = averageTimeBefore/_numberOfTests;
+                averageTimeAfter = averageTimeAfter/_numberOfTests;
+                assertData.Add(new Tuple<string, int, int, float, float,float>(program.FullName, assertsBefore, assertsRemoved,
+                    averageExecutionTime, averageTimeBefore, averageTimeAfter));
             }
             return assertData;
         }
 
-        public List<Tuple<string, int, int, float>> InvariantRemoval()
+        public List<Tuple<string, int, int, float, float, float>> InvariantRemoval()
         {
-            var invariantData = new List<Tuple<string, int, int, float>>();
+            var invariantData = new List<Tuple<string, int, int, float, float, float>>();
 
             foreach (var program in _programs) {
                 Console.WriteLine("\nRemoving invariants from {0}", program.FullName);
@@ -155,9 +188,16 @@ namespace shorty
                 var invariantsRemoved = 0;
                 float averageExecutionTime = 0;
                 var valid = true;
+                float averageTimeBefore = 0;
+                float averageTimeAfter = 0;
 
                 for (var i = 0; i < _numberOfTests; i++) {
-                    var shorty = new Shorty(CloneProgram(program), Shorty.Mode.Singular);
+                    var programClone = CloneProgram(program);
+                    var shorty = new Shorty(programClone, Shorty.Mode.Singular);
+
+                    //Find the verificaiton time before the shorty method is run
+                    averageTimeBefore += FindExecutionTime(programClone);
+
                     if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
                         foreach (var stmt in shorty.invariants.Keys) {
@@ -182,30 +222,43 @@ namespace shorty
                     if (i == 0) {
                         invariantsRemoved = invariants.Count;
                     }
+
+                    averageTimeAfter += FindExecutionTime(programClone);
                 }
                 if (!valid)
                     continue;
 
                 //Calculate average execution time and
                 averageExecutionTime = averageExecutionTime/_numberOfTests;
-                invariantData.Add(new Tuple<string, int, int, float>(program.FullName, invariantsBefore, invariantsRemoved, averageExecutionTime));
+                averageTimeBefore = averageTimeBefore / _numberOfTests;
+                averageTimeAfter = averageTimeAfter / _numberOfTests;
+                invariantData.Add(new Tuple<string, int, int, float, float, float>(program.FullName, invariantsBefore, invariantsRemoved, 
+                    averageExecutionTime, averageTimeBefore, averageTimeAfter));
             }
             return invariantData;
         }
 
-        public List<Tuple<string, int, int, float>> LemmaCallRemoval()
+        public List<Tuple<string, int, int, float, float, float>> LemmaCallRemoval()
         {
-            var lemmaCallData = new List<Tuple<string, int, int, float>>();
+            var lemmaCallData = new List<Tuple<string, int, int, float, float, float>>();
             foreach (var program in _programs) {
                 Console.WriteLine("\nRemoving lemma calls from {0}", program.FullName);
                 var lemmaCallsBefore = 0;
                 var lemmaCallsRemoved = 0;
                 float averageExecutionTime = 0;
                 var valid = true;
+                float averageTimeBefore = 0;
+                float averageTimeAfter = 0;
 
                 for (var i = 0; i < _numberOfTests; i++) {
-                    var shorty = new Shorty(CloneProgram(program), Shorty.Mode.Singular);
-                    if (i == 0) {
+                    var programClone = CloneProgram(program);
+                    var shorty = new Shorty(programClone, Shorty.Mode.Singular);
+
+                    //Find the verificaiton time before the shorty method is run
+                    averageTimeBefore += FindExecutionTime(programClone);
+
+                    if (i == 0)
+                    {
                         //Find out how many invariants were in the program before the removal - only do on first run
                         foreach (var stmt in shorty.lemmaCalls.Keys) {
                             lemmaCallsBefore += shorty.lemmaCalls[stmt].Count;
@@ -218,6 +271,7 @@ namespace shorty
                     sw.Stop();
 
                     averageExecutionTime += sw.ElapsedMilliseconds;
+                    averageTimeAfter += FindExecutionTime(programClone);
 
                     if (lemmaCalls == null) {
                         _tw.WriteLine(program.Name + "Failed to find Lemma calls");
@@ -236,14 +290,17 @@ namespace shorty
 
                 //Calculate average execution time and
                 averageExecutionTime = averageExecutionTime/_numberOfTests;
-                lemmaCallData.Add(new Tuple<string, int, int, float>(program.FullName, lemmaCallsBefore, lemmaCallsRemoved, averageExecutionTime));
+                averageTimeBefore = averageTimeBefore / _numberOfTests;
+                averageTimeAfter = averageTimeAfter / _numberOfTests;
+                lemmaCallData.Add(new Tuple<string, int, int, float, float, float>(program.FullName, lemmaCallsBefore, lemmaCallsRemoved, 
+                    averageExecutionTime, averageTimeBefore, averageTimeAfter));
             }
             return lemmaCallData;
         }
 
-        public List<Tuple<string, int, int, float>> DecreasesRemoval()
+        public List<Tuple<string, int, int, float, float, float>> DecreasesRemoval()
         {
-            var decreasesData = new List<Tuple<string, int, int, float>>();
+            var decreasesData = new List<Tuple<string, int, int, float, float, float>>();
 
             foreach (var program in _programs) {
                 Console.WriteLine("\nRemoving decreases from {0}", program.FullName);
@@ -251,10 +308,18 @@ namespace shorty
                 var decreasesRemoved = 0;
                 float averageExecutionTime = 0;
                 var valid = true;
+                float averageTimeBefore = 0;
+                float averageTimeAfter = 0;
 
                 for (var i = 0; i < _numberOfTests; i++) {
-                    var shorty = new Shorty(CloneProgram(program), Shorty.Mode.Singular);
-                    if (i == 0) {
+                    var programClone = CloneProgram(program);
+                    var shorty = new Shorty(programClone, Shorty.Mode.Singular);
+
+                    //Find the verificaiton time before the shorty method is run
+                    averageTimeBefore += FindExecutionTime(programClone);
+                    
+                    if (i == 0)
+                    {
                         //Find out how many invariants were in the program before the removal - only do on first run
                         foreach (var method in shorty.decreases.Keys) {
                             decreasesBefore += shorty.decreases[method].Count;
@@ -272,6 +337,7 @@ namespace shorty
                     }
 
                     averageExecutionTime += sw.ElapsedMilliseconds;
+                    averageTimeAfter += FindExecutionTime(programClone);
 
                     //Gather all other needed information in the first run
                     if (i == 0) {
@@ -284,7 +350,10 @@ namespace shorty
 
                 //Calculate average execution time and
                 averageExecutionTime = averageExecutionTime/_numberOfTests;
-                decreasesData.Add(new Tuple<string, int, int, float>(program.FullName, decreasesBefore, decreasesRemoved, averageExecutionTime));
+                averageTimeBefore = averageTimeBefore / _numberOfTests;
+                averageTimeAfter = averageTimeAfter / _numberOfTests;
+                decreasesData.Add(new Tuple<string, int, int, float, float, float>(program.FullName, decreasesBefore, decreasesRemoved, 
+                    averageExecutionTime, averageTimeBefore, averageTimeAfter));
             }
             return decreasesData;
         }

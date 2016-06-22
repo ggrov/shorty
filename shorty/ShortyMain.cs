@@ -18,7 +18,7 @@ namespace shorty
         static Bpl.OutputPrinter printer;
         //private Printer printer;
 
-        static void RunLogger(List<Program> programs)
+        public static void RunLogger(List<Program> programs)
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
             //using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
@@ -27,7 +27,7 @@ namespace shorty
             }
         }
 
-        static void RunTest(List<Program> programs)
+        public static void RunTest(List<Program> programs)
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
                 foreach (var program in programs) {

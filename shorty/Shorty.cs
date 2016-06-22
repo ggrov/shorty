@@ -28,6 +28,10 @@ namespace shorty
         Dictionary<AssertStmt, Statement> removedParentsDictionary = new Dictionary<AssertStmt, Statement>();
         Dictionary<AssertStmt, MatchCaseStmt> removedCaseStmts = new Dictionary<AssertStmt, MatchCaseStmt>();
 
+        public bool BreakDownExpressions { get; set; }
+
+        public Tuple<List<AssertStmt>, Dictionary<AssertStmt, AssertStmt>> 
+
         // Modes:
         // All removes all asserts at once and then tries to reinsert them based on the error message - it does not always 100% succesed
         // Singular removes asserts once at a time - it takes longer but is more robust.
@@ -56,6 +60,7 @@ namespace shorty
             this.mode = mode;
             this.program = program;
             FindRemovables();
+            BreakDownExpressions = true;
         }
 
         public void PrintAsserts()
@@ -413,29 +418,6 @@ namespace shorty
 
         #region Asserts
 
-        private void TryToRemoveAssert(AssertStmt assert, BlockStmt block, Dictionary<AssertStmt, Statement> removedParentsDictionary, List<AssertStmt> removedCaseAsserts)
-        {
-            if (!assertsToKeep.Contains(assert)) {
-                int index = block.Body.IndexOf(assert);
-                block.Body.Remove(assert);
-                //all at once method
-                if (mode == Mode.All) {
-                    if (!removedParentsDictionary.ContainsKey(assert) && !removedCaseAsserts.Contains(assert)) {
-                        removedParentsDictionary.Add(assert, block);
-                    }
-                }
-                //as it goes method
-                else if (mode == Mode.Singular) {
-                    if (!IsProgramValid()) {
-                        block.Body.Insert(index, assert);
-                    }
-                    else if (!removedParentsDictionary.ContainsKey(assert)) {
-                        removedParentsDictionary.Add(assert, block);
-                    }
-                }
-            }
-        }
-
         public Dictionary<Method, List<List<AssertStmt>>> TestDifferentRemovals()
         {
             Dictionary<Method, List<List<AssertStmt>>> returnData = new Dictionary<Method, List<List<AssertStmt>>>();
@@ -501,6 +483,59 @@ namespace shorty
                     throw new Exception("assert not found in match case");
                 }
 
+            }
+        }
+
+        /// <summary>
+        /// Breaks down an assert statement based off of && operators
+        /// </summary>
+        /// <param name="assert">The statement to break down</param>
+        /// <returns>a list of new assert statements that can be separateley tested</returns>
+        private List<AssertStmt> BreakDownExpr(AssertStmt assert)
+        {
+            var brokenAsserts = new List<AssertStmt>();
+            if (assert.Expr is BinaryExpr) {
+                BinaryExpr expr = (BinaryExpr)assert.Expr;
+                if (expr.Op == BinaryExpr.Opcode.And) {//or or statements or anything else???
+                    AssertStmt newAssert = new AssertStmt(expr.tok, assert.EndTok, expr.E0, assert.Attributes);
+                    AssertStmt newAssert2 = new AssertStmt(expr.tok, assert.EndTok, expr.E0, assert.Attributes);
+
+                    brokenAsserts.AddRange(BreakDownExpr(newAssert));
+                    brokenAsserts.AddRange(BreakDownExpr(newAssert2));
+                    return brokenAsserts;
+                }
+            }
+            brokenAsserts.Add(assert);
+            return brokenAsserts;
+        }
+
+        private void TryToRemoveAssert(AssertStmt assert, BlockStmt block, Dictionary<AssertStmt, Statement> removedParentsDictionary, List<AssertStmt> removedCaseAsserts)
+        {
+            if (!assertsToKeep.Contains(assert)) {
+                int index = block.Body.IndexOf(assert);
+                block.Body.Remove(assert);
+                //all at once method
+                if (mode == Mode.All) {
+                    if (!removedParentsDictionary.ContainsKey(assert) && !removedCaseAsserts.Contains(assert)) {
+                        removedParentsDictionary.Add(assert, block);
+                    }
+                }
+                //as it goes method
+                else if (mode == Mode.Singular) {
+                    if (!IsProgramValid()) {
+                        var brokenAsserts = BreakDownExpr(assert);
+                        if (brokenAsserts.Count == 1) {
+                            block.Body.Insert(index, assert);
+                        }
+                        else {
+                            //The assert has been broken down into multiple parts
+
+                        }
+                    }
+                    else if (!removedParentsDictionary.ContainsKey(assert)) {
+                        removedParentsDictionary.Add(assert, block);
+                    }
+                }
             }
         }
 
