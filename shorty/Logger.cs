@@ -41,21 +41,21 @@ namespace shorty
 
             //Assertions
             _tw.WriteLine("Assert Removal");
-            _tw.WriteLine("Program Name, Asserts Before, Asserts After, Asserts Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Verification Time Improvement");
+            _tw.WriteLine("Program Name, Asserts Before, Asserts After, Asserts Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
 
             var assertData = AssertRemoval();
             LogTupleListData(assertData);
 
             //Invariants
             _tw.WriteLine("\nInvariant Removal");
-            _tw.WriteLine("Program Name, Invariants Before, Invariants After, Invariants Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Average Verification Time Improvement");
+            _tw.WriteLine("Program Name, Invariants Before, Invariants After, Invariants Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
 
             var invariantData = InvariantRemoval();
             LogTupleListData(invariantData);
 
             //Lemma Call
             _tw.WriteLine("\nLemma Call Removal");
-            _tw.WriteLine("Program Name, Lemma Calls Before, Lemma Calls After, Lemma Calls Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Average Verification Time Improvement");
+            _tw.WriteLine("Program Name, Lemma Calls Before, Lemma Calls After, Lemma Calls Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
 
             var lemmaCallData = LemmaCallRemoval();
             LogTupleListData(lemmaCallData);
@@ -63,7 +63,7 @@ namespace shorty
 
             //Decreases
             _tw.WriteLine("Decreases Removal");
-            _tw.WriteLine("\nProgram Name, Decreaseses Before, Decreases After, Decreaseses Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Average Verification Time Improvement");
+            _tw.WriteLine("\nProgram Name, Decreaseses Before, Decreases After, Decreaseses Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
 
             var decreasesData = DecreasesRemoval();
             LogTupleListData(decreasesData);
@@ -320,11 +320,12 @@ namespace shorty
                     //Find the verificaiton time before the shorty method is run
                     averageTimeBefore += FindExecutionTime(programClone);
                     
-                    if (i == 0)
-                    {
+                    if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
                         foreach (var method in shorty.Decreases.Keys) {
-                            decreasesBefore += shorty.Decreases[method].Count;
+                            decreasesBefore += method.Decreases.Expressions.Count;
+                            foreach(var loop in shorty.Decreases[method])
+                            decreasesBefore += loop.Decreases.Expressions.Count;
                         }
                     }
 

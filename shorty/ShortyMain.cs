@@ -102,7 +102,7 @@ namespace shorty
                 dafnyPrograms.Add(new Program(programName, module, builtIns));
             }
 
-            Console.WriteLine("1: standard run\n2: run logger");
+            Console.WriteLine("1: standard run\n2: run logger\n3: run order testing");
             string input = Console.ReadLine();
             int ans;
             if (!Int32.TryParse(input, out ans)) {
@@ -118,6 +118,7 @@ namespace shorty
             }
             if (ans == 3) {
                 RunTest(dafnyPrograms);
+                Console.WriteLine("Tests complete");
                 Console.ReadLine();
                 return;
             }
@@ -192,7 +193,7 @@ namespace shorty
                 removableLemmaCalls.Add(program, lemmaCalls);
                 sw.Stop();
                 times.Add(program, sw.ElapsedMilliseconds);
-                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied-" + program.FullName)) {
+                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\" + program.FullName)) {
 //                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
                     shorty.PrintProgram(writer);
                 }
