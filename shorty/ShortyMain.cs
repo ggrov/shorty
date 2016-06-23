@@ -20,8 +20,8 @@ namespace shorty
 
         public static void RunLogger(List<Program> programs)
         {
-            using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
-            //using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
+//            using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
+            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
                 Logger logger = new Logger(writer, programs);
                 logger.LogAllData();
             }
@@ -29,7 +29,8 @@ namespace shorty
 
         public static void RunTest(List<Program> programs)
         {
-            using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
+//            using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
+            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\results.txt")) {
                 foreach (var program in programs) {
                     Shorty shorty = new Shorty(program);
                     Dictionary<Method,List<List<AssertStmt>>> solutions = shorty.TestDifferentRemovals();
@@ -52,8 +53,8 @@ namespace shorty
             Contract.Requires(args != null);
             //Setup environment
             DafnyOptions.Install(new DafnyOptions());
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-            //Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             printer = new Bpl.ConsolePrinter();
@@ -97,9 +98,9 @@ namespace shorty
 
                 ModuleDecl module = new LiteralModuleDecl(new DefaultModuleDecl(), null);
                 var builtIns = new BuiltIns();
-                Parser.Parse(fileName, module, builtIns, new Errors());
+                Parser.Parse(fileName, module, builtIns, new Errors(new ConsoleErrorReporter()));
 
-                dafnyPrograms.Add(new Program(programName, module, builtIns));
+                dafnyPrograms.Add(new Microsoft.Dafny.Program(programName, module, builtIns, new ConsoleErrorReporter()));
             }
 
             Console.WriteLine("1: standard run\n2: run logger\n3: run order testing");
@@ -193,8 +194,8 @@ namespace shorty
                 removableLemmaCalls.Add(program, lemmaCalls);
                 sw.Stop();
                 times.Add(program, sw.ElapsedMilliseconds);
-                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\" + program.FullName)) {
-//                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
+//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\" + program.FullName)) {
+                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
                     shorty.PrintProgram(writer);
                 }
             }

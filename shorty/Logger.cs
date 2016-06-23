@@ -31,7 +31,7 @@ namespace shorty
         {
             var cloner = new Cloner();
             var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
-            return new Program(program.FullName, moduleDecl, program.BuiltIns);
+            return new Program(program.FullName, moduleDecl, program.BuiltIns, new ConsoleErrorReporter());
         }
 
         public void LogAllData()

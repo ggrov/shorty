@@ -33,31 +33,28 @@
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Boogie">
-      <HintPath>..\..\..\tacny\boogie\Binaries\Boogie.exe</HintPath>
+      <HintPath>..\..\tacny\boogie\Binaries\Boogie.exe</HintPath>
     </Reference>
-    <Reference Include="Concurrency, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\tacny\boogie\Binaries\Concurrency.dll</HintPath>
+    <Reference Include="BoogieConcurrency">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieConcurrency.dll</HintPath>
     </Reference>
-    <Reference Include="Core">
-      <HintPath>..\..\..\tacny\dafny\Binaries\Core.dll</HintPath>
+    <Reference Include="BoogieCore">
+      <HintPath>..\..\tacny\dafny\Binaries\BoogieCore.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieExecutionEngine">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieExecutionEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieParserHelper">
+      <HintPath>..\..\tacny\dafny\Binaries\BoogieParserHelper.dll</HintPath>
     </Reference>
     <Reference Include="Dafny">
-      <HintPath>..\..\..\tacny\dafny\Binaries\Dafny.exe</HintPath>
+      <HintPath>..\..\tacny\dafny\Binaries\Dafny.exe</HintPath>
     </Reference>
     <Reference Include="DafnyPipeline">
-      <HintPath>..\..\..\tacny\dafny\Binaries\DafnyPipeline.dll</HintPath>
-    </Reference>
-    <Reference Include="ExecutionEngine, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\tacny\boogie\Binaries\ExecutionEngine.dll</HintPath>
+      <HintPath>..\..\tacny\dafny\Binaries\DafnyPipeline.dll</HintPath>
     </Reference>
     <Reference Include="nunit.framework">
       <HintPath>..\packages\NUnit.3.2.1\lib\net45\nunit.framework.dll</HintPath>
-    </Reference>
-    <Reference Include="ParserHelper, Version=2.3.0.61016, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
-      <SpecificVersion>False</SpecificVersion>
-      <HintPath>..\..\..\tacny\boogie\Binaries\ParserHelper.dll</HintPath>
     </Reference>
     <Reference Include="System" />
     <Reference Include="System.Core" />

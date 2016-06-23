@@ -98,7 +98,7 @@ namespace shorty
 
 
             Printer dafnyPrinter = new Printer(writer);
-            dafnyPrinter.PrintProgram(Program);
+            dafnyPrinter.PrintProgram(Program, false);
 
 
             //now we have to reinsert all of the expressions
@@ -649,7 +649,7 @@ namespace shorty
         {
             var cloner = new Cloner();
             var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
-            return new Program(program.FullName, moduleDecl, program.BuiltIns);
+            return new Program(program.FullName, moduleDecl, program.BuiltIns, new ConsoleErrorReporter());
         }
 
         public bool IsProgramValid()
@@ -658,7 +658,7 @@ namespace shorty
             string programId = "main_program_id";
             Bpl.PipelineStatistics stats = new Bpl.PipelineStatistics();
 
-            var translator = new Translator();
+            var translator = new Translator(new ConsoleErrorReporter());
             Program programCopy = CloneProgram(Program);
 
             var resolver = new Resolver(programCopy);
@@ -681,9 +681,9 @@ namespace shorty
 
             var bplFileName = "bplFile";
             Bpl.LinearTypeChecker ltc;
-            Bpl.MoverTypeChecker mtc;
+            Bpl.CivlTypeChecker ctc;
 
-            var oc = Bpl.ExecutionEngine.ResolveAndTypecheck(boogieProgram, bplFileName, out ltc, out mtc);
+            var oc = Bpl.ExecutionEngine.ResolveAndTypecheck(boogieProgram, bplFileName, out ltc, out ctc);
             switch (oc) {
                 case Bpl.PipelineOutcome.ResolutionError:
                     return false;
