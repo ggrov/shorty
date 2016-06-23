@@ -11,30 +11,31 @@ namespace shorty
     {
         public Program Program { get; private set; }
 
-
-
         //Asserts
-        private readonly Dictionary<Statement, List<AssertStmt>> _andAsserts = new Dictionary<Statement, List<AssertStmt>>();
+        //private readonly Dictionary<Statement, List<AssertStmt>> _andAsserts = new Dictionary<Statement, List<AssertStmt>>();
         private readonly Dictionary<Method, Dictionary<Statement, List<AssertStmt>>> _asserts = new Dictionary<Method, Dictionary<Statement, List<AssertStmt>>>();
-        
+
         public Dictionary<Method, Dictionary<Statement, List<AssertStmt>>> Asserts {
             get { return _asserts; }
         }
 
         //Invariants
         private readonly Dictionary<LoopStmt, List<MaybeFreeExpression>> _invariants = new Dictionary<LoopStmt, List<MaybeFreeExpression>>();
+
         public Dictionary<LoopStmt, List<MaybeFreeExpression>> Invariants {
             get { return _invariants; }
         }
 
         //Decreases
         private readonly Dictionary<Method, List<LoopStmt>> _decreases = new Dictionary<Method, List<LoopStmt>>();
+
         public Dictionary<Method, List<LoopStmt>> Decreases {
             get { return _decreases; }
         }
 
         //Lemma Calls
         private readonly Dictionary<Statement, List<UpdateStmt>> _lemmaCalls = new Dictionary<Statement, List<UpdateStmt>>(); //The type of lemma calls we want to remove are inside UpdateStatement
+
         public Dictionary<Statement, List<UpdateStmt>> LemmaCalls {
             get { return _lemmaCalls; }
         }
@@ -120,17 +121,17 @@ namespace shorty
         private void FindRemovables()
         {
             //foreach (var module in program.Modules) {
-                //look through each module...
-                foreach (var decl in Program.DefaultModuleDef.TopLevelDecls) {
-                    //lookthrough all TopDeclaration...
-                    if (decl is ClassDecl) {
-                        //we need to look through classes to find members which might contain allAsserts
-                        var classDecl = (ClassDecl) decl;
-                        foreach (var member in classDecl.Members) {
-                            CheckMember(member);
-                        }
+            //look through each module...
+            foreach (var decl in Program.DefaultModuleDef.TopLevelDecls) {
+                //lookthrough all TopDeclaration...
+                if (decl is ClassDecl) {
+                    //we need to look through classes to find members which might contain allAsserts
+                    var classDecl = (ClassDecl) decl;
+                    foreach (var member in classDecl.Members) {
+                        CheckMember(member);
                     }
                 }
+            }
             //}
         }
 
@@ -160,7 +161,7 @@ namespace shorty
             if (statement is AssertStmt) {
                 //If the parent is in the dictionary, add the assert to the parent.  Otherwise, add it aswell as the item in a new list.
                 AssertStmt assert = (AssertStmt) statement;
-                
+
                 if (!_asserts.ContainsKey(method)) {
                     _asserts.Add(method, new Dictionary<Statement, List<AssertStmt>>());
                 }
@@ -171,18 +172,6 @@ namespace shorty
                 }
                 else {
                     _asserts[method].Add(parent, new List<AssertStmt> {assert});
-                }
-
-                //If the assert is an AND operator, add it to the andAsserts
-                if (assert.Expr is BinaryExpr) {
-                    var binExpr = (BinaryExpr) assert.Expr;
-                    if (binExpr.Op == BinaryExpr.Opcode.And) {
-                        if (!_andAsserts.ContainsKey(parent)) {
-                            _andAsserts.Add(parent, new List<AssertStmt>());
-                        }
-
-                        _andAsserts[parent].Add(assert);
-                    }
                 }
             }
             else if (statement is BlockStmt) {
@@ -417,8 +406,8 @@ namespace shorty
         {
             int count = 0;
             foreach (var block in _asserts[method].Keys) {
-                if (count + _asserts[method][block].Count-1 < index) {
-                    count += _asserts[method][block].Count-1;
+                if (count + _asserts[method][block].Count - 1 < index) {
+                    count += _asserts[method][block].Count - 1;
                 }
                 else {
                     return _asserts[method][block][index - count];
@@ -454,7 +443,7 @@ namespace shorty
         {
             Dictionary<Method, List<List<AssertStmt>>> returnData = new Dictionary<Method, List<List<AssertStmt>>>();
 
-   
+
             foreach (Method method in _asserts.Keys) {
                 List<List<AssertStmt>> solutions = new List<List<AssertStmt>>();
                 TestRemovals(0, solutions, new List<AssertStmt>(), method);
@@ -479,15 +468,14 @@ namespace shorty
                 block.Body.Remove(assert);
                 if (IsProgramValid()) {
                     var newCurrentSolution = new List<AssertStmt>(currentSolution) {assert}; //create a copy of the currentSolution and add in the assert
-                    TestRemovals(index+1, solutions, newCurrentSolution, method);
+                    TestRemovals(index + 1, solutions, newCurrentSolution, method);
                     block.Body.Insert(assertPos, assert);
-                    TestRemovals(index+1, solutions, currentSolution, method);
+                    TestRemovals(index + 1, solutions, currentSolution, method);
                 }
                 else {
                     block.Body.Insert(assertPos, assert);
                     TestRemovals(index + 1, solutions, currentSolution, method);
                 }
-
             }
             else if (parent is MatchStmt) {
                 var matchStmt = (MatchStmt) parent;
@@ -497,15 +485,13 @@ namespace shorty
                         found = true;
                         int assertPos = matchCase.Body.IndexOf(assert);
                         matchCase.Body.Remove(assert);
-                        if (IsProgramValid())
-                        {
-                            var newCurrentSolution = new List<AssertStmt>(currentSolution) { assert }; //create a copy of the currentSolution and add in the assert
+                        if (IsProgramValid()) {
+                            var newCurrentSolution = new List<AssertStmt>(currentSolution) {assert}; //create a copy of the currentSolution and add in the assert
                             TestRemovals(index + 1, solutions, newCurrentSolution, method);
                             matchCase.Body.Insert(assertPos, assert);
                             TestRemovals(index + 1, solutions, currentSolution, method);
                         }
-                        else
-                        {
+                        else {
                             matchCase.Body.Insert(assertPos, assert);
                             TestRemovals(index + 1, solutions, currentSolution, method);
                         }
@@ -514,43 +500,55 @@ namespace shorty
                 if (!found) {
                     throw new Exception("assert not found in match case");
                 }
-
             }
         }
 
+        /// <summary>
+        /// Removes unnecessary parts of asserts (e.g. combined by && where one part is not needed)
+        /// </summary>
+        /// <returns></returns>
         public List<Tuple<AssertStmt, AssertStmt>> GetSimplifiedAsserts()
         {
             var simplifiedAsserts = new List<Tuple<AssertStmt, AssertStmt>>();
 
-            foreach (Statement stmnt in _andAsserts.Keys) {
-                if (!(stmnt is BlockStmt)) continue;
-                var bl = (BlockStmt) stmnt;
-                foreach (AssertStmt assert in _andAsserts[stmnt]) {
-                    int index = bl.Body.IndexOf(assert);
-                    bl.Body.Remove(assert);
-                    if (!IsProgramValid()) {
-                        //Break down the asserts
-                        var brokenAsserts = BreakDownExpr(assert);
-                        //Add them back in
-                        foreach (var brokenAssert in brokenAsserts) {
-                            bl.Body.Insert(index, brokenAssert);                                
-                        }
-                        brokenAsserts.Reverse();
-                        //Test to see which can be removed
-                        for (int i = brokenAsserts.Count-1; i >= 0; i--) {
-                            int j = bl.Body.IndexOf(brokenAsserts[i]);
-                            bl.Body.Remove(brokenAsserts[i]);
-                            if (IsProgramValid()) {
-                                brokenAsserts.Remove(brokenAsserts[i]); //Item was removed successfully
-                            }
-                            else {
-                                bl.Body.Insert(j, brokenAsserts[i]); //Item could not be removed - reinsert
+            foreach (var method in _asserts.Keys) {
+                foreach (Statement stmt in _asserts[method].Keys) {
+                    if (!(stmt is BlockStmt)) continue; //TODO: Add for match statements
+                    var bl = (BlockStmt) stmt;
+                    foreach (AssertStmt assert in _asserts[method][stmt]) {
+                        //Check and see if it is an AND operation - if not, continue
+                        if (assert.Expr is BinaryExpr) {
+                            var binExpr = (BinaryExpr) assert.Expr;
+                            if (binExpr.Op != BinaryExpr.Opcode.And) {
+                                continue;
                             }
                         }
-                        simplifiedAsserts.Add(new Tuple<AssertStmt, AssertStmt>(assert, CombineAsserts(brokenAsserts)));
-                    }
-                    else {
-                        Console.WriteLine("Item can be completely removed separately");
+                        int index = bl.Body.IndexOf(assert);
+                        bl.Body.Remove(assert);
+                        if (!IsProgramValid()) {
+                            //Break down the asserts
+                            var brokenAsserts = BreakDownExpr(assert);
+                            //Add them back in
+                            foreach (var brokenAssert in brokenAsserts) {
+                                bl.Body.Insert(index, brokenAssert);
+                            }
+                            brokenAsserts.Reverse();
+                            //Test to see which can be removed
+                            for (int i = brokenAsserts.Count - 1; i >= 0; i--) {
+                                int j = bl.Body.IndexOf(brokenAsserts[i]);
+                                bl.Body.Remove(brokenAsserts[i]);
+                                if (IsProgramValid()) {
+                                    brokenAsserts.Remove(brokenAsserts[i]); //Item was removed successfully
+                                }
+                                else {
+                                    bl.Body.Insert(j, brokenAsserts[i]); //Item could not be removed - reinsert
+                                }
+                            }
+                            simplifiedAsserts.Add(new Tuple<AssertStmt, AssertStmt>(assert, CombineAsserts(brokenAsserts)));
+                        }
+                        else {
+                            Console.WriteLine("Item can be completely removed separately");
+                        }
                     }
                 }
             }
@@ -560,8 +558,7 @@ namespace shorty
 
         private AssertStmt CombineAsserts(List<AssertStmt> brokenAsserts)
         {
-            if (brokenAsserts.Count < 1)
-            {
+            if (brokenAsserts.Count < 1) {
                 return null;
             }
             if (brokenAsserts.Count == 1)
@@ -586,8 +583,9 @@ namespace shorty
         {
             var brokenAsserts = new List<AssertStmt>();
             if (assert.Expr is BinaryExpr) {
-                BinaryExpr expr = (BinaryExpr)assert.Expr;
-                if (expr.Op == BinaryExpr.Opcode.And) {//or or statements or anything else???
+                BinaryExpr expr = (BinaryExpr) assert.Expr;
+                if (expr.Op == BinaryExpr.Opcode.And) {
+//or or statements or anything else???
                     AssertStmt newAssert = new AssertStmt(expr.tok, assert.EndTok, expr.E0, assert.Attributes);
                     AssertStmt newAssert2 = new AssertStmt(expr.tok, assert.EndTok, expr.E1, assert.Attributes);
 
@@ -611,12 +609,11 @@ namespace shorty
 
             //go through each block
 
-            foreach(var method in _asserts.Keys) {
+            foreach (var method in _asserts.Keys) {
                 foreach (Statement stmnt in _asserts[method].Keys) {
                     if (stmnt is BlockStmt) {
                         BlockStmt bl = (BlockStmt) stmnt;
-                        foreach (AssertStmt assert in _asserts[method][stmnt])
-                        {
+                        foreach (AssertStmt assert in _asserts[method][stmnt]) {
                             int index = bl.Body.IndexOf(assert);
                             bl.Body.Remove(assert);
                             if (!IsProgramValid()) {
@@ -630,8 +627,7 @@ namespace shorty
                     // Match statements are not stored in a block or inherited from notmal statements so we need a special case from them
                     else if (stmnt is MatchStmt) {
                         MatchStmt ms = (MatchStmt) stmnt;
-                        foreach (AssertStmt assert in _asserts[method][stmnt])
-                        {
+                        foreach (AssertStmt assert in _asserts[method][stmnt]) {
                             foreach (MatchCaseStmt mcs in ms.Cases) {
                                 mcs.Body.Remove(assert);
                                 if (!removedAsserts.Contains(assert)) {
@@ -657,8 +653,8 @@ namespace shorty
 
         #region validation
 
-        public void BoogieErrorInformation(Bpl.ErrorInformation errorInfo) { }
-        
+        public void BoogieErrorInformation(Bpl.ErrorInformation errorInfo) {}
+
         private Program CloneProgram(Program program)
         {
             var cloner = new Cloner();
@@ -676,12 +672,10 @@ namespace shorty
             Program programCopy = CloneProgram(Program);
 
             var resolver = new Resolver(programCopy);
-            try
-            {
+            try {
                 resolver.ResolveProgram(programCopy);
             }
-            catch
-            {
+            catch {
                 Console.WriteLine("Failed to resolve program");
                 return false;
             }
@@ -743,6 +737,7 @@ namespace shorty
                     return false;
             }
         }
+
         #endregion
     }
 }
