@@ -108,7 +108,7 @@ namespace shorty
 
         public long FindExecutionTime(Program program)
         {
-            Shorty shorty = new Shorty(CloneProgram(program), Shorty.Mode.Singular);
+            Shorty shorty = new Shorty(CloneProgram(program));
             Stopwatch watch = new Stopwatch();
             watch.Start();
             if (!shorty.IsProgramValid())
@@ -133,14 +133,16 @@ namespace shorty
                 // Run each test and add up the time of each one so the average can be found
                 for (var i = 0; i < _numberOfTests; i++) {
                     var programClone = CloneProgram(program);
-                    var shorty = new Shorty(programClone, Shorty.Mode.Singular);
+                    var shorty = new Shorty(programClone);
 
                     averageTimeBefore += FindExecutionTime(programClone);
                     
                     if (i == 0) {
                         //Find out how many asserts were in the program before the removal - only do on first run
-                        foreach (var stmt in shorty.asserts.Keys) {
-                            assertsBefore += shorty.asserts[stmt].Count;
+                        foreach (var method in shorty.Asserts.Keys) {
+                            foreach (var stmt in shorty.Asserts[method].Keys) {
+                                assertsBefore += shorty.Asserts[method][stmt].Count;                                
+                            }
                         }
                     }
 
@@ -193,15 +195,15 @@ namespace shorty
 
                 for (var i = 0; i < _numberOfTests; i++) {
                     var programClone = CloneProgram(program);
-                    var shorty = new Shorty(programClone, Shorty.Mode.Singular);
+                    var shorty = new Shorty(programClone);
 
                     //Find the verificaiton time before the shorty method is run
                     averageTimeBefore += FindExecutionTime(programClone);
 
                     if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
-                        foreach (var stmt in shorty.invariants.Keys) {
-                            invariantsBefore += shorty.invariants[stmt].Count;
+                        foreach (var stmt in shorty.Invariants.Keys) {
+                            invariantsBefore += shorty.Invariants[stmt].Count;
                         }
                     }
 
@@ -252,7 +254,7 @@ namespace shorty
 
                 for (var i = 0; i < _numberOfTests; i++) {
                     var programClone = CloneProgram(program);
-                    var shorty = new Shorty(programClone, Shorty.Mode.Singular);
+                    var shorty = new Shorty(programClone);
 
                     //Find the verificaiton time before the shorty method is run
                     averageTimeBefore += FindExecutionTime(programClone);
@@ -260,8 +262,8 @@ namespace shorty
                     if (i == 0)
                     {
                         //Find out how many invariants were in the program before the removal - only do on first run
-                        foreach (var stmt in shorty.lemmaCalls.Keys) {
-                            lemmaCallsBefore += shorty.lemmaCalls[stmt].Count;
+                        foreach (var stmt in shorty.LemmaCalls.Keys) {
+                            lemmaCallsBefore += shorty.LemmaCalls[stmt].Count;
                         }
                     }
 
@@ -313,7 +315,7 @@ namespace shorty
 
                 for (var i = 0; i < _numberOfTests; i++) {
                     var programClone = CloneProgram(program);
-                    var shorty = new Shorty(programClone, Shorty.Mode.Singular);
+                    var shorty = new Shorty(programClone);
 
                     //Find the verificaiton time before the shorty method is run
                     averageTimeBefore += FindExecutionTime(programClone);
@@ -321,8 +323,8 @@ namespace shorty
                     if (i == 0)
                     {
                         //Find out how many invariants were in the program before the removal - only do on first run
-                        foreach (var method in shorty.decreases.Keys) {
-                            decreasesBefore += shorty.decreases[method].Count;
+                        foreach (var method in shorty.Decreases.Keys) {
+                            decreasesBefore += shorty.Decreases[method].Count;
                         }
                     }
 

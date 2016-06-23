@@ -31,7 +31,7 @@ namespace shorty
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
                 foreach (var program in programs) {
-                    Shorty shorty = new Shorty(program, Shorty.Mode.Singular);
+                    Shorty shorty = new Shorty(program);
                     Dictionary<Method,List<List<AssertStmt>>> solutions = shorty.TestDifferentRemovals();
 
                     foreach (Method method in solutions.Keys) {
@@ -138,8 +138,7 @@ namespace shorty
             foreach (Program program in dafnyPrograms) {
                 sw.Reset();
                 sw.Start();
-                Shorty.Mode mode = Shorty.Mode.Singular;
-                var shorty = new Shorty(program, mode);
+                var shorty = new Shorty(program);
 //                shorty.PrintAsserts();
                 Console.WriteLine(program.FullName);
                 if (!shorty.IsProgramValid()) {
