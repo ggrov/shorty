@@ -20,8 +20,8 @@ namespace shorty
 
         public static void RunLogger(List<Program> programs)
         {
-//            using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
-            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
+            using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
+//            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
                 Logger logger = new Logger(writer, programs);
                 logger.LogAllData();
             }
@@ -29,8 +29,8 @@ namespace shorty
 
         public static void RunTest(List<Program> programs)
         {
-//            using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
-            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\results.txt")) {
+            using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
+//            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\results.txt")) {
                 foreach (var program in programs) {
                     Shorty shorty = new Shorty(program);
                     Dictionary<Method,List<List<AssertStmt>>> solutions = shorty.TestDifferentRemovals();
@@ -53,8 +53,8 @@ namespace shorty
             Contract.Requires(args != null);
             //Setup environment
             DafnyOptions.Install(new DafnyOptions());
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             printer = new Bpl.ConsolePrinter();
@@ -146,7 +146,7 @@ namespace shorty
                 if (!shorty.IsProgramValid()) {
                     Console.WriteLine("Initial failed");
                     failedInitialValidationPrograms.Add(program);
-                    break;
+                    continue;
                 }
 
                 Console.WriteLine("Finding unnecesary asserts");
@@ -155,7 +155,7 @@ namespace shorty
                 if (asserts == null) {
                     Console.WriteLine("Finding unnecessary asserts failed");
                     failedAssertRemovalPrograms.Add(program);
-                    break;
+                    continue;
                 }
 
                 Console.WriteLine("Finding unnecessary loop invariants");
@@ -163,21 +163,21 @@ namespace shorty
 
                 if (invariants == null) {
                     Console.WriteLine("Finding invariants failed");
-                    break;
+                    continue;
                 }
 
                 Console.WriteLine("Finding unnecessary loop invariants");
                 List<Expression> decreases = shorty.FindRemoveableDecreases();
                 if (decreases == null) {
                     Console.WriteLine("Finding decreases failed");
-                    break;
+                    continue;
                 }
 
                 Console.WriteLine("Finding unnecessary lemma calls");
                 List<UpdateStmt> lemmaCalls = shorty.FindRemovableLemmaCalls();
                 if (lemmaCalls == null) {
                     Console.WriteLine("Finding lemma calls failed");
-                    break;
+                    continue;
                 }
 
                 if (!shorty.IsProgramValid()) {
@@ -194,8 +194,8 @@ namespace shorty
                 removableLemmaCalls.Add(program, lemmaCalls);
                 sw.Stop();
                 times.Add(program, sw.ElapsedMilliseconds);
-//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\" + program.FullName)) {
-                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
+                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\short-" + program.FullName)) {
+//                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
                     shorty.PrintProgram(writer);
                 }
             }

@@ -10,21 +10,39 @@ namespace shorty
     class Logger
     {
         private readonly TextWriter _tw;
-        private readonly List<Program> _programs;
-        private readonly int _numberOfTests = 2;
+        public readonly List<Program> Programs;
+        public readonly List<Program> InvalidPrograms = new List<Program>();
+        private readonly int _numberOfTests = 1;
 
         public Logger(TextWriter tw, List<Program> programs, int numberOfTest)
         {
             Contract.Requires(numberOfTest > 0);
             _numberOfTests = numberOfTest;
             _tw = tw;
-            _programs = programs;
+            Programs = programs;
+            EnsureProgramsVerify();
         }
 
         public Logger(TextWriter tw, List<Program> programs)
         {
             _tw = tw;
-            _programs = programs;
+            Programs = programs;
+            EnsureProgramsVerify();
+        }
+
+        private void EnsureProgramsVerify()
+        {
+            for (int i = Programs.Count - 1; i >= 0; i--)
+            {
+                Program copy = CloneProgram(Programs[i]);
+                Shorty shorty = new Shorty(copy);
+
+                if (!shorty.IsProgramValid())
+                {
+                    InvalidPrograms.Add(Programs[i]);
+                    Programs.Remove(Programs[i]);
+                }
+            }
         }
 
         private Program CloneProgram(Program program)
@@ -36,11 +54,15 @@ namespace shorty
 
         public void LogAllData()
         {
-            _tw.WriteLine("Logging data for {0} programs", _programs.Count);
-            _tw.WriteLine("");
+
+            _tw.WriteLine("Logging data for {0} programs", Programs.Count);
+            _tw.WriteLine("\nPrograms that failed initial verification");
+            foreach (var program in InvalidPrograms) {
+                _tw.WriteLine(program.FullName);
+            }
 
             //Assertions
-            _tw.WriteLine("Assert Removal");
+            _tw.WriteLine("\nAssert Removal");
             _tw.WriteLine("Program Name, Asserts Before, Asserts After, Asserts Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
 
             var assertData = AssertRemoval();
@@ -103,7 +125,7 @@ namespace shorty
             var totalVerTimeImprovement = totalVerTimeBefore - totalVerTimeAfter;
             _tw.WriteLine("Total, {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%",
                 totalTime, totalVerTimeBefore, totalVerTimeAfter, totalVerTimeImprovement);
-            _tw.WriteLine(",,,,,,,Avg ver Time Improvement:,{0}", totalVerTimeImprovement/_programs.Count);
+            _tw.WriteLine(",,,,,,,Avg ver Time Improvement:,{0}", totalVerTimeImprovement/Programs.Count);
         }
 
         public long FindExecutionTime(Program program)
@@ -121,7 +143,7 @@ namespace shorty
         {
             var assertData = new List<Tuple<string, int, int, float, float, float>>();
 
-            foreach (var program in _programs) {
+            foreach (var program in Programs) {
                 Console.WriteLine("\nRemoving Asserts from {0}", program.FullName);
                 var assertsBefore = 0;
                 var assertsRemoved = 0;
@@ -184,7 +206,7 @@ namespace shorty
         {
             var invariantData = new List<Tuple<string, int, int, float, float, float>>();
 
-            foreach (var program in _programs) {
+            foreach (var program in Programs) {
                 Console.WriteLine("\nRemoving invariants from {0}", program.FullName);
                 var invariantsBefore = 0;
                 var invariantsRemoved = 0;
@@ -243,7 +265,7 @@ namespace shorty
         public List<Tuple<string, int, int, float, float, float>> LemmaCallRemoval()
         {
             var lemmaCallData = new List<Tuple<string, int, int, float, float, float>>();
-            foreach (var program in _programs) {
+            foreach (var program in Programs) {
                 Console.WriteLine("\nRemoving lemma calls from {0}", program.FullName);
                 var lemmaCallsBefore = 0;
                 var lemmaCallsRemoved = 0;
@@ -304,7 +326,7 @@ namespace shorty
         {
             var decreasesData = new List<Tuple<string, int, int, float, float, float>>();
 
-            foreach (var program in _programs) {
+            foreach (var program in Programs) {
                 Console.WriteLine("\nRemoving decreases from {0}", program.FullName);
                 var decreasesBefore = 0;
                 var decreasesRemoved = 0;
@@ -323,9 +345,7 @@ namespace shorty
                     if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
                         foreach (var method in shorty.Decreases.Keys) {
-                            decreasesBefore += method.Decreases.Expressions.Count;
-                            foreach(var loop in shorty.Decreases[method])
-                            decreasesBefore += loop.Decreases.Expressions.Count;
+                            decreasesBefore += shorty.Decreases[method].Count;
                         }
                     }
 
