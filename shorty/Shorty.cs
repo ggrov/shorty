@@ -55,6 +55,10 @@ namespace shorty
         List<WildCardDecreases> wildCardDecreases = new List<WildCardDecreases>();
 
         //Lemma Calls
+        //Need to keep track of methods
+
+        private readonly Dictionary<ModuleDecl, Dictionary<ClassDecl, List<Method>>> allMethods = new Dictionary<ModuleDecl, Dictionary<ClassDecl, List<Method>>>();
+
         private readonly Dictionary<Statement, List<UpdateStmt>> _lemmaCalls = new Dictionary<Statement, List<UpdateStmt>>(); //The type of lemma calls we want to remove are inside UpdateStatement
 
         public Dictionary<Statement, List<UpdateStmt>> LemmaCalls {
@@ -141,6 +145,20 @@ namespace shorty
 
         private void FindRemovables()
         {
+            //First we need to find all the methods so the lemma calls can find them
+            allMethods.Add(Program.DefaultModule, new Dictionary<ClassDecl,List<Method>>());
+            foreach (var decl in Program.DefaultModuleDef.TopLevelDecls) {
+                if (decl is ClassDecl) {
+                    FindClass((ClassDecl)decl, Program.DefaultModule);
+                }
+                else if (decl is LiteralModuleDecl)
+                {
+                    FindModule((LiteralModuleDecl)decl);
+                }
+            }
+
+
+
             //foreach (var module in program.Modules) {
             //look through each module...
             foreach (var decl in Program.DefaultModuleDef.TopLevelDecls) {
@@ -148,14 +166,56 @@ namespace shorty
                 if (decl is ClassDecl) {
                     //we need to look through classes to find members which might contain allAsserts
                     var classDecl = (ClassDecl) decl;
-                    foreach (var member in classDecl.Members) {
-                        CheckMember(member);
-                    }
+                    CheckClass(classDecl, Program.DefaultModule);
                 }
             }
         }
 
-        private void CheckMember(MemberDecl member)
+        private void FindModule(LiteralModuleDecl module)
+        {
+
+            allMethods.Add(module, new Dictionary<ClassDecl,List<Method>>());
+            foreach (var decl in module.ModuleDef.TopLevelDecls) {
+                if (decl is ClassDecl) {
+                    FindClass((ClassDecl)decl, module);
+                }
+                else if (decl is LiteralModuleDecl)
+                {
+                    FindModule((LiteralModuleDecl)decl);
+                }
+            }
+        }
+
+        private void FindClass(ClassDecl classDecl, ModuleDecl module)
+        {
+            allMethods[module].Add(classDecl, new List<Method>());
+            foreach (var member in classDecl.Members) {
+                if (member is Method) {
+                    allMethods[module][classDecl].Add((Method) member);
+                }
+            }
+        }
+
+        private void CheckModule(LiteralModuleDecl module)
+        {
+            foreach (var decl in module.ModuleDef.TopLevelDecls) {
+                if (decl is ClassDecl) {
+                    CheckClass((ClassDecl) decl, module);
+                }
+                else if (decl is LiteralModuleDecl) {
+                    CheckModule((LiteralModuleDecl) decl);
+                }
+            }
+        }
+
+        private void CheckClass(ClassDecl classDecl, ModuleDecl module)
+        {
+            foreach (var member in classDecl.Members) {
+                    CheckMember(member, classDecl, module);
+            }
+        }
+
+        private void CheckMember(MemberDecl member, ClassDecl classDecl, ModuleDecl module)
         {
             Contract.Requires(member != null);
             if (member is Method) {
@@ -185,7 +245,7 @@ namespace shorty
                 if (block != null) {
                     foreach (var statement in block.Body) {
                         //We can now see all the statements in the blocks body.
-                        CheckStatement(statement, block, method, wildCardParent);
+                        CheckStatement(statement, block, method, wildCardParent, classDecl, module);
                     }
                 }
             }
@@ -193,7 +253,7 @@ namespace shorty
 //            { Console.WriteLine("Member not method"); }
         }
 
-        private void CheckStatement(Statement statement, Statement parent, Method method, WildCardDecreases wildCardParent)
+        private void CheckStatement(Statement statement, Statement parent, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl, ModuleDecl module)
         {
             Contract.Requires(statement != null);
             Contract.Requires(parent != null);
@@ -216,13 +276,13 @@ namespace shorty
             else if (statement is BlockStmt) {
                 BlockStmt blockStmt = (BlockStmt) statement;
                 foreach (var stmt in blockStmt.Body) {
-                    CheckStatement(stmt, statement, method, wildCardParent);
+                    CheckStatement(stmt, statement, method, wildCardParent, classDecl, module);
                 }
             }
             else if (statement is IfStmt) {
                 IfStmt ifstmt = (IfStmt) statement;
-                CheckStatement(ifstmt.Thn, statement, method, wildCardParent);
-                CheckStatement(ifstmt.Els, statement, method, wildCardParent);
+                CheckStatement(ifstmt.Thn, statement, method, wildCardParent, classDecl, module);
+                CheckStatement(ifstmt.Els, statement, method, wildCardParent, classDecl, module);
             }
             else if (statement is LoopStmt) {
                 LoopStmt loopStmt = (LoopStmt) statement;
@@ -230,38 +290,43 @@ namespace shorty
                 wildCardParent = GetDecreasesLoop(loopStmt, method, wildCardParent);
                 if (loopStmt is WhileStmt) {
                     WhileStmt whileStmt = (WhileStmt) loopStmt;
-                    CheckStatement(whileStmt.Body, statement, method, wildCardParent);
+                    CheckStatement(whileStmt.Body, statement, method, wildCardParent, classDecl, module);
                 }
             }
             else if (statement is MatchStmt) {
                 MatchStmt match = (MatchStmt) statement;
                 foreach (MatchCaseStmt matchCase in match.Cases) {
                     foreach (Statement stmt in matchCase.Body) {
-                        CheckStatement(stmt, statement, method, wildCardParent);
+                        CheckStatement(stmt, statement, method, wildCardParent, classDecl, module);
                     }
                 }
             }
             else if (statement is ForallStmt) {
                 ForallStmt forall = (ForallStmt) statement;
-                CheckStatement(forall.Body, statement, method, wildCardParent);
+                CheckStatement(forall.Body, statement, method, wildCardParent, classDecl, module);
             }
             else if (statement is CalcStmt) {
                 CalcStmt calc = (CalcStmt) statement;
                 foreach (var hint in calc.Hints) {
-                    CheckStatement(hint, statement, method, wildCardParent);
+                    CheckStatement(hint, statement, method, wildCardParent, classDecl, module);
                 }
             }
             else if (statement is UpdateStmt) {
+                // This no longer works on resolved program
                 UpdateStmt updateStmt = (UpdateStmt) statement;
-                foreach (var stmt in updateStmt.ResolvedStatements) {
-                    if (stmt is CallStmt) {
-                        CallStmt callStmt = (CallStmt) stmt;
-                        if (callStmt.Method.IsGhost) //Should find lemmas and ghost methods
-                        {
-                            if (!_lemmaCalls.ContainsKey(parent)) {
-                                _lemmaCalls.Add(parent, new List<UpdateStmt>());
+                foreach (var expr in updateStmt.Rhss) {
+                    if (expr is ExprRhs) {
+                        ExprRhs exprRhs = (ExprRhs) expr;
+                        if (exprRhs.Expr is ApplySuffix) {
+                            ApplySuffix applySuffix = (ApplySuffix) exprRhs.Expr;
+                            // Find the corresponding method
+                            if (IsCallToGhost(applySuffix, classDecl, module)) //Should find lemmas and ghost methods
+                            {
+                                if (!_lemmaCalls.ContainsKey(parent)) {
+                                    _lemmaCalls.Add(parent, new List<UpdateStmt>());
+                                }
+                                _lemmaCalls[parent].Add(updateStmt);
                             }
-                            _lemmaCalls[parent].Add(updateStmt);
                         }
                     }
                 }
@@ -274,6 +339,24 @@ namespace shorty
         #endregion
 
         #region Lemma Calls
+
+        private bool IsCallToGhost(ApplySuffix expr, ClassDecl classDecl, ModuleDecl module)
+        {
+            string name = "";
+            if (expr.Lhs is NameSegment) {
+                NameSegment nameSeg = (NameSegment) expr.Lhs;
+                name = nameSeg.Name;
+            }
+
+            // Look through all the methods in its current scope
+            foreach (var method in allMethods[module][classDecl]) {
+                if (method.Name == name) {
+                    return method.IsGhost;
+                }
+            }
+            return false;
+        }
+
 
         public List<UpdateStmt> FindRemovableLemmaCalls()
         {
