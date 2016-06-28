@@ -53,8 +53,8 @@ namespace shorty
         List<WildCardDecreases> wildCardDecreases = new List<WildCardDecreases>();
 
         //Lemma Calls
-        //Need to keep track of methods
 
+        //Need to keep track of methods
         private readonly Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>> allMethods = new Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>>();
 
         private readonly Dictionary<Statement, List<UpdateStmt>> _lemmaCalls = new Dictionary<Statement, List<UpdateStmt>>(); //The type of lemma calls we want to remove are inside UpdateStatement
