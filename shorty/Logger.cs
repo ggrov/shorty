@@ -34,14 +34,19 @@ namespace shorty
         {
             for (int i = Programs.Count - 1; i >= 0; i--)
             {
+                Console.WriteLine("Checking " + Programs[i].FullName);
                 Program copy = CloneProgram(Programs[i]);
                 Shorty shorty = new Shorty(copy);
-
                 if (!shorty.IsProgramValid())
                 {
                     InvalidPrograms.Add(Programs[i]);
                     Programs.Remove(Programs[i]);
+                    Console.WriteLine("Program {0} is not valid!", copy.Name);
                 }
+                else {
+                    Console.WriteLine("Program {0} is vailid! :D", copy.Name);
+                }
+                //Console.ReadLine();
             }
         }
 
@@ -54,7 +59,6 @@ namespace shorty
 
         public void LogAllData()
         {
-
             _tw.WriteLine("Logging data for {0} programs", Programs.Count);
             _tw.WriteLine("\nPrograms that failed initial verification");
             foreach (var program in InvalidPrograms) {
