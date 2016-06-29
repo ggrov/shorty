@@ -26,12 +26,13 @@ namespace shorty
             get { return _invariants; }
         }
 
-        //Decreases
-        private readonly Dictionary<Method, List<Expression>> _decreases = new Dictionary<Method, List<Expression>>();
+        //Decreases - method<(methodDecreases, loops<loopDecreases>)>
+        private readonly Dictionary<MemberDecl, Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>> _decreases = new Dictionary<MemberDecl, Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>>();
 
-        public Dictionary<Method, List<Expression>> Decreases {
+        public Dictionary<MemberDecl, Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>> Decreases {
             get { return _decreases; }
         }
+        public readonly List<WildCardDecreases> wildCardDecreases = new List<WildCardDecreases>();
 
         // Need to create a tree to keep track of wild card decreases so we know who the parent of each one is as we need to remove bottom up
         internal class WildCardDecreases
@@ -40,7 +41,15 @@ namespace shorty
             public readonly Specification<Expression> ParentSpecification;
             public readonly WildCardDecreases ParentWildCardDecreases;
             public readonly List<WildCardDecreases> SubDecreases = new List<WildCardDecreases>();
-            public int Count = 1;
+
+            public int Count()
+            {
+                int count = 1;
+                foreach (var wildCardDecreases in SubDecreases) {
+                    count += wildCardDecreases.Count();
+                }
+                return count;
+            }
 
             public WildCardDecreases(Expression decreasesExpression, Specification<Expression> parentSpecification, WildCardDecreases parentWildCardDecreases)
             {
@@ -50,12 +59,11 @@ namespace shorty
             }
         }
 
-        List<WildCardDecreases> wildCardDecreases = new List<WildCardDecreases>();
 
         //Lemma Calls
 
         //Need to keep track of methods
-        private readonly Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>> allMethods = new Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>>();
+        private readonly Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>> _allMethods = new Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>>();
 
         private readonly Dictionary<Statement, List<UpdateStmt>> _lemmaCalls = new Dictionary<Statement, List<UpdateStmt>>(); //The type of lemma calls we want to remove are inside UpdateStatement
 
@@ -112,9 +120,9 @@ namespace shorty
 
         private void FindModule(ModuleDefinition module)
         {
-            if (allMethods.ContainsKey(module))
+            if (_allMethods.ContainsKey(module))
                 return;
-            allMethods.Add(module, new Dictionary<ClassDecl, List<Method>>());
+            _allMethods.Add(module, new Dictionary<ClassDecl, List<Method>>());
             foreach (var decl in module.TopLevelDecls) {
                 if (decl is ClassDecl) {
                     FindClass((ClassDecl) decl, module);
@@ -128,10 +136,10 @@ namespace shorty
 
         private void FindClass(ClassDecl classDecl, ModuleDefinition module)
         {
-            allMethods[module].Add(classDecl, new List<Method>());
+            _allMethods[module].Add(classDecl, new List<Method>());
             foreach (var member in classDecl.Members) {
                 if (member is Method) {
-                    allMethods[module][classDecl].Add((Method) member);
+                    _allMethods[module][classDecl].Add((Method) member);
                 }
             }
         }
@@ -159,29 +167,37 @@ namespace shorty
         private void CheckMember(MemberDecl member, ClassDecl classDecl, ModuleDefinition module)
         {
             Contract.Requires(member != null);
+            Specification<Expression> decreases = null;
+
+            WildCardDecreases wildCardParent = null;
+
+            //First deal with the decreases
             if (member is Method) {
-                //If the member is a method it has a body which can contian statements
                 var method = (Method) member;
-                WildCardDecreases wildCardParent = null;
-                bool nonWildCardFlag = false;
-                //Find out if there are any wildcard decreases
-                foreach (var expression in method.Decreases.Expressions) {
+                decreases = method.Decreases;
+            }
+            else if (member is Function) {
+                var function = (Function) member;
+                decreases = function.Decreases;
+            }
+            if (decreases != null) {
+                foreach (var expression in decreases.Expressions) {
                     if (expression is WildcardExpr) {
-                        wildCardParent = new WildCardDecreases(expression, method.Decreases, null);
+                        wildCardParent = new WildCardDecreases(expression, decreases, null);
                         wildCardDecreases.Add(wildCardParent);
                     }
                     else {
-                        nonWildCardFlag = true;
+                        if (!_decreases.ContainsKey(member)) {
+                            _decreases.Add(member, new Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>(new List<Expression>(), new Dictionary<LoopStmt, List<Expression>>()));
+                        }
+                        _decreases[member].Item1.Add(expression);
                     }
                 }
-                //As long as there was a non-wildcard, add it to the standard thong
-                if (nonWildCardFlag) {
-                    if (!_decreases.ContainsKey(method)) {
-                        _decreases.Add(method, new List<Expression>());
-                    }
-                    _decreases[method].AddRange(method.Decreases.Expressions);
-                }
+            }
 
+            if (member is Method) {
+                //If the member is a method it has a body which can contian statements
+                var method = (Method) member;
                 var block = method.Body;
                 if (block != null) {
                     foreach (var statement in block.Body) {
@@ -190,8 +206,6 @@ namespace shorty
                     }
                 }
             }
-//            else
-//            { Console.WriteLine("Member not method"); }
         }
 
         private void CheckStatement(Statement statement, Statement parent, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl, ModuleDefinition module)
@@ -290,7 +304,7 @@ namespace shorty
             }
 
             // Look through all the methods in its current scope
-            foreach (var method in allMethods[module][classDecl]) {
+            foreach (var method in _allMethods[module][classDecl]) {
                 if (method.Name == name) {
                     return method.IsGhost;
                 }
@@ -333,9 +347,12 @@ namespace shorty
 
         private WildCardDecreases GetDecreasesLoop(LoopStmt loop, Method method, WildCardDecreases wildCardParent)
         {
+            //Deal with wildcard decreases
             WildCardDecreases wcd = wildCardParent;
+            int wildCardCount = 0;
             foreach (Expression expr in loop.Decreases.Expressions) {
                 if (expr is WildcardExpr) {
+                    wildCardCount++;
                     wcd = new WildCardDecreases(expr, loop.Decreases, wildCardParent);
                     if (wildCardParent != null) {
                         wildCardParent.SubDecreases.Add(wcd);
@@ -347,38 +364,65 @@ namespace shorty
                 }
             }
 
-
-            if (!_decreases.ContainsKey(method)) {
-                _decreases.Add(method, new List<Expression>());
-            }
-            if (method.Decreases.Expressions.Count > 0) {
-                _decreases[method].AddRange(loop.Decreases.Expressions);
+            // Deal with any normal decreases
+            if (loop.Decreases.Expressions.Count > wildCardCount) {
+                if (!_decreases.ContainsKey(method)) {
+                    _decreases.Add(method, new Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>(new List<Expression>(), new Dictionary<LoopStmt, List<Expression>>()));
+                }
+                if (!_decreases[method].Item2.ContainsKey(loop)) {
+                    _decreases[method].Item2.Add(loop, new List<Expression>());
+                }
+                foreach (var expression in loop.Decreases.Expressions) {
+                    if (!(expression is WildcardExpr)) {
+                        _decreases[method].Item2[loop].AddRange(loop.Decreases.Expressions);
+                    }
+                }
             }
             return wcd;
+        }
+
+        public List<Expression> RemoveDecreasesFromParent(List<Expression> decreases)
+        {
+            List<Expression> removeableDecreases = new List<Expression>();
+
+            for (int i = decreases.Count - 1; i >= 0; i--) {
+                Expression expr = decreases[i];
+                if (expr == null || expr is WildcardExpr) continue; //wildcards found afterwards
+                decreases.Remove(expr);
+                if (!IsProgramValid()) {
+                    Console.WriteLine("\nCannot remove decreases at " + expr.tok.line + "\n");
+                    decreases.Insert(i, expr);
+                }
+                else {
+                    removeableDecreases.Add(expr);
+                }
+            }
+
+
+            return removeableDecreases;
         }
 
         public List<Expression> FindRemoveableDecreases()
         {
             List<Expression> removeableDecreases = new List<Expression>();
 
-            foreach (Method method in _decreases.Keys) {
-                var decreases = _decreases[method];
-                for (int i = decreases.Count - 1; i >= 0; i--) {
-                    Expression expr = decreases[i];
-                    if (expr == null || expr is AutoGeneratedExpression || expr is WildcardExpr) continue; //wildcards found afterwards
-                    decreases.Remove(expr);
-                    //Insert an auto-generated one or see if there is one that can be inserted or something...
-                    if (!IsProgramValid()) {
-                        Console.WriteLine("\nCannot remove decreases at " + expr.tok.line + "\n");
-                        decreases.Insert(i, expr);
-                    }
-                    else {
-                        removeableDecreases.Add(expr);
-                    }
+            foreach (MemberDecl member in _decreases.Keys) {
+                //Remove from member
+                if (member is Method) {
+                    var method = (Method) member;
+                    removeableDecreases.AddRange(RemoveDecreasesFromParent(method.Decreases.Expressions));
+                }
+                else if (member is Function) {
+                    var function = (Function) member;
+                    removeableDecreases.AddRange(RemoveDecreasesFromParent(function.Decreases.Expressions));
+                }
+                foreach (var loop in _decreases[member].Item2.Keys) {
+                    //remove from loops
+                    removeableDecreases.AddRange(RemoveDecreasesFromParent(loop.Decreases.Expressions));
                 }
             }
 
-            removeableDecreases.AddRange(FindRemovableWildCards());
+            removeableDecreases.AddRange(FindRemovableWildCards()); //remove wildcards
 
             return removeableDecreases;
         }
@@ -425,6 +469,7 @@ namespace shorty
         #endregion
 
         #region Invariants
+
         void GetLoopInvariants(LoopStmt loop)
         {
             if (!_invariants.ContainsKey(loop))
@@ -433,12 +478,10 @@ namespace shorty
 
         public List<MaybeFreeExpression> FindRemovableInvariants()
         {
-            //should maybe do something like creating a copy of the ast because it is being changed.
             List<MaybeFreeExpression> removeableInvariants = new List<MaybeFreeExpression>();
 
             foreach (var loopStmt in _invariants.Keys) {
                 List<MaybeFreeExpression> invariantList = _invariants[loopStmt];
-                //invariantList.Reverse(); //flip order to work from bottom up.
 
                 for (int i = invariantList.Count - 1; i >= 0; i--) {
                     if (invariantList[i] == null)

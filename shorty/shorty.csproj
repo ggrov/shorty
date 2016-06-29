@@ -109,6 +109,9 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Tests.cs">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Compile>
     <Compile Include="Logger.cs" />
     <Compile Include="Shorty.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

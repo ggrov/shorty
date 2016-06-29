@@ -22,7 +22,7 @@ namespace shorty
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
 //            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
-                Logger logger = new Logger(writer, programs, 3);
+                Logger logger = new Logger(writer, programs, 1);
                 logger.LogAllData();
             }
         }
@@ -103,7 +103,7 @@ namespace shorty
                 dafnyPrograms.Add(new Microsoft.Dafny.Program(programName, module, builtIns, new ConsoleErrorReporter()));
             }
 
-            Console.WriteLine("1: standard run\n2: run logger\n3: run order testing");
+            Console.WriteLine("1: standard run\n2: run logger\n3: run order testing\n4: run unit tests");
             string input = Console.ReadLine();
             int ans;
             if (!Int32.TryParse(input, out ans)) {

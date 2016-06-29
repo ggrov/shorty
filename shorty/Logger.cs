@@ -349,7 +349,13 @@ namespace shorty
                     if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
                         foreach (var method in shorty.Decreases.Keys) {
-                            decreasesBefore += shorty.Decreases[method].Count;
+                            decreasesBefore += shorty.Decreases[method].Item1.Count;
+                            foreach (var loop in shorty.Decreases[method].Item2.Keys) {
+                                decreasesBefore += shorty.Decreases[method].Item2[loop].Count;
+                            }
+                        }
+                        foreach (var wildCardDecreases in shorty.wildCardDecreases) {
+                            decreasesBefore += wildCardDecreases.Count();
                         }
                     }
 
