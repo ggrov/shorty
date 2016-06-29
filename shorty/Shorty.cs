@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Diagnostics.Contracts;
 using System.IO;
+using System.Linq;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 
@@ -113,65 +114,69 @@ namespace shorty
         private void FindRemovables()
         {
             //First we need to find all the methods so the lemma calls can find them
-            FindModule(Program.DefaultModuleDef);
+            IdentifyModule(Program.DefaultModuleDef);
             //Now we check each module to find the removables
-            CheckModule(Program.DefaultModuleDef);
+            FindRemovableTypesInModule(Program.DefaultModuleDef);
         }
 
-        private void FindModule(ModuleDefinition module)
+        private void IdentifyModule(ModuleDefinition module)
         {
             if (_allMethods.ContainsKey(module))
                 return;
             _allMethods.Add(module, new Dictionary<ClassDecl, List<Method>>());
-            foreach (var decl in module.TopLevelDecls) {
-                if (decl is ClassDecl) {
-                    FindClass((ClassDecl) decl, module);
-                }
-                else if (decl is LiteralModuleDecl) {
-                    LiteralModuleDecl literalModule = (LiteralModuleDecl) decl;
-                    FindModule(literalModule.ModuleDef);
-                }
+            foreach (var decl in module.TopLevelDecls)
+               IdentifyTopLevelDecl(decl, module);
+        }
+
+        private void IdentifyTopLevelDecl(Declaration decl, ModuleDefinition module)
+        {
+            if (decl is ClassDecl)
+                IdentifyClass((ClassDecl)decl, module);
+            else if (decl is LiteralModuleDecl){
+                LiteralModuleDecl literalModule = (LiteralModuleDecl)decl;
+                IdentifyModule(literalModule.ModuleDef);
             }
         }
 
-        private void FindClass(ClassDecl classDecl, ModuleDefinition module)
+        private void IdentifyClass(ClassDecl classDecl, ModuleDefinition module)
         {
             _allMethods[module].Add(classDecl, new List<Method>());
-            foreach (var member in classDecl.Members) {
-                if (member is Method) {
+            foreach (var member in classDecl.Members)
+                if (member is Method)
                     _allMethods[module][classDecl].Add((Method) member);
-                }
-            }
         }
 
-        private void CheckModule(ModuleDefinition module)
+        private void FindRemovableTypesInModule(ModuleDefinition module)
         {
             foreach (var decl in module.TopLevelDecls) {
-                if (decl is ClassDecl) {
-                    CheckClass((ClassDecl) decl, module);
-                }
+                if (decl is ClassDecl)
+                    FindRemovableTypesInClass((ClassDecl) decl, module);
                 else if (decl is LiteralModuleDecl) {
                     LiteralModuleDecl literalModule = (LiteralModuleDecl) decl;
-                    CheckModule(literalModule.ModuleDef);
+                    FindRemovableTypesInModule(literalModule.ModuleDef);
                 }
             }
         }
 
-        private void CheckClass(ClassDecl classDecl, ModuleDefinition module)
+        private void FindRemovableTypesInClass(ClassDecl classDecl, ModuleDefinition module)
         {
             foreach (var member in classDecl.Members) {
-                CheckMember(member, classDecl, module);
+                FindRemovableTypesInMember(member, classDecl, module);
             }
         }
 
-        private void CheckMember(MemberDecl member, ClassDecl classDecl, ModuleDefinition module)
+        private void FindRemovableTypesInMember(MemberDecl member, ClassDecl classDecl, ModuleDefinition module)
         {
-            Contract.Requires(member != null);
+            WildCardDecreases wildCardParent = null; // The parent of the current wildCard we are tracking
+            FindDecreasesTypesInMember(member, ref wildCardParent);
+            var method = member as Method;
+            if (method != null) 
+                FindRemovableTypesInMethod(method, wildCardParent, classDecl, module);
+        }
+
+        private void FindDecreasesTypesInMember(MemberDecl member, ref WildCardDecreases wildCardParent)
+        {
             Specification<Expression> decreases = null;
-
-            WildCardDecreases wildCardParent = null;
-
-            //First deal with the decreases
             if (member is Method) {
                 var method = (Method) member;
                 decreases = method.Decreases;
@@ -180,64 +185,45 @@ namespace shorty
                 var function = (Function) member;
                 decreases = function.Decreases;
             }
-            if (decreases != null) {
-                foreach (var expression in decreases.Expressions) {
-                    if (expression is WildcardExpr) {
-                        wildCardParent = new WildCardDecreases(expression, decreases, null);
-                        wildCardDecreases.Add(wildCardParent);
-                    }
-                    else {
-                        if (!_decreases.ContainsKey(member)) {
-                            _decreases.Add(member, new Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>(new List<Expression>(), new Dictionary<LoopStmt, List<Expression>>()));
-                        }
-                        _decreases[member].Item1.Add(expression);
-                    }
-                }
-            }
+            if (decreases != null) 
+                FindDecreasesTypesInMethodFunction(decreases, ref wildCardParent, member);
+        }
 
-            if (member is Method) {
-                //If the member is a method it has a body which can contian statements
-                var method = (Method) member;
-                var block = method.Body;
-                if (block != null) {
-                    foreach (var statement in block.Body) {
-                        //We can now see all the statements in the blocks body.
-                        CheckStatement(statement, block, method, wildCardParent, classDecl, module);
-                    }
+        private void FindDecreasesTypesInMethodFunction(Specification<Expression> decreases, ref WildCardDecreases wildCardParent, MemberDecl member )
+        {
+            foreach (var expression in decreases.Expressions) {
+                if (expression is WildcardExpr) {
+                    wildCardParent = new WildCardDecreases(expression, decreases, null);
+                    wildCardDecreases.Add(wildCardParent);
+                    continue;
                 }
+                if (!_decreases.ContainsKey(member)) 
+                    _decreases.Add(member, new Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>(new List<Expression>(), new Dictionary<LoopStmt, List<Expression>>()));
+                _decreases[member].Item1.Add(expression);
             }
         }
 
-        private void CheckStatement(Statement statement, Statement parent, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl, ModuleDefinition module)
+        private void FindRemovableTypesInMethod(Method method, WildCardDecreases wildCardParent, ClassDecl classDecl, ModuleDefinition module)
         {
-            Contract.Requires(statement != null);
-            Contract.Requires(parent != null);
-            if (statement is AssertStmt) {
-                //If the parent is in the dictionary, add the assert to the parent.  Otherwise, add it aswell as the item in a new list.
-                AssertStmt assert = (AssertStmt) statement;
+            var block = method.Body;
+            foreach (var statement in block.Body)
+                FindRemovableTypesInStatement(statement, block, method, wildCardParent, classDecl, module);
+        }
 
-                if (!_asserts.ContainsKey(method)) {
-                    _asserts.Add(method, new Dictionary<Statement, List<AssertStmt>>());
-                }
-                if (_asserts[method].ContainsKey(parent)) {
-                    if (!_asserts[method][parent].Contains(assert)) {
-                        _asserts[method][parent].Add(assert);
-                    }
-                }
-                else {
-                    _asserts[method].Add(parent, new List<AssertStmt> {assert});
-                }
-            }
+        private void FindRemovableTypesInStatement(Statement statement, Statement parent, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl, ModuleDefinition module)
+        {
+            if (statement is AssertStmt)
+                FindRemovableTypesInAssertStmt((AssertStmt)statement, parent, method);
             else if (statement is BlockStmt) {
                 BlockStmt blockStmt = (BlockStmt) statement;
                 foreach (var stmt in blockStmt.Body) {
-                    CheckStatement(stmt, statement, method, wildCardParent, classDecl, module);
+                    FindRemovableTypesInStatement(stmt, statement, method, wildCardParent, classDecl, module);
                 }
             }
             else if (statement is IfStmt) {
                 IfStmt ifstmt = (IfStmt) statement;
-                CheckStatement(ifstmt.Thn, statement, method, wildCardParent, classDecl, module);
-                CheckStatement(ifstmt.Els, statement, method, wildCardParent, classDecl, module);
+                FindRemovableTypesInStatement(ifstmt.Thn, statement, method, wildCardParent, classDecl, module);
+                FindRemovableTypesInStatement(ifstmt.Els, statement, method, wildCardParent, classDecl, module);
             }
             else if (statement is LoopStmt) {
                 LoopStmt loopStmt = (LoopStmt) statement;
@@ -245,100 +231,98 @@ namespace shorty
                 wildCardParent = GetDecreasesLoop(loopStmt, method, wildCardParent);
                 if (loopStmt is WhileStmt) {
                     WhileStmt whileStmt = (WhileStmt) loopStmt;
-                    CheckStatement(whileStmt.Body, statement, method, wildCardParent, classDecl, module);
+                    FindRemovableTypesInStatement(whileStmt.Body, statement, method, wildCardParent, classDecl, module);
                 }
             }
             else if (statement is MatchStmt) {
                 MatchStmt match = (MatchStmt) statement;
                 foreach (MatchCaseStmt matchCase in match.Cases) {
                     foreach (Statement stmt in matchCase.Body) {
-                        CheckStatement(stmt, statement, method, wildCardParent, classDecl, module);
+                        FindRemovableTypesInStatement(stmt, statement, method, wildCardParent, classDecl, module);
                     }
                 }
             }
             else if (statement is ForallStmt) {
                 ForallStmt forall = (ForallStmt) statement;
-                CheckStatement(forall.Body, statement, method, wildCardParent, classDecl, module);
+                FindRemovableTypesInStatement(forall.Body, statement, method, wildCardParent, classDecl, module);
             }
             else if (statement is CalcStmt) {
                 CalcStmt calc = (CalcStmt) statement;
                 foreach (var hint in calc.Hints) {
-                    CheckStatement(hint, statement, method, wildCardParent, classDecl, module);
+                    FindRemovableTypesInStatement(hint, statement, method, wildCardParent, classDecl, module);
                 }
             }
-            else if (statement is UpdateStmt) {
-                // This no longer works on resolved program
-                UpdateStmt updateStmt = (UpdateStmt) statement;
-                foreach (var expr in updateStmt.Rhss) {
-                    if (expr is ExprRhs) {
-                        ExprRhs exprRhs = (ExprRhs) expr;
-                        if (exprRhs.Expr is ApplySuffix) {
-                            ApplySuffix applySuffix = (ApplySuffix) exprRhs.Expr;
-                            // Find the corresponding method
-                            if (IsCallToGhost(applySuffix, classDecl, module)) //Should find lemmas and ghost methods
-                            {
-                                if (!_lemmaCalls.ContainsKey(parent)) {
-                                    _lemmaCalls.Add(parent, new List<UpdateStmt>());
-                                }
-                                _lemmaCalls[parent].Add(updateStmt);
-                            }
-                        }
-                    }
-                }
+            else if (statement is UpdateStmt)
+                FindRemovableTypesInUpdateStmt((UpdateStmt) statement, parent, classDecl, module);
+        }
+
+        private void FindRemovableTypesInAssertStmt(AssertStmt assert, Statement parent, Method method)
+        {
+            if (!_asserts.ContainsKey(method))
+                _asserts.Add(method, new Dictionary<Statement, List<AssertStmt>>());
+            if (!Asserts[method].ContainsKey(parent))
+                _asserts[method].Add(parent, new List<AssertStmt>());
+            if (!_asserts[method][parent].Contains(assert))
+                _asserts[method][parent].Add(assert);
+        }
+
+        private void FindRemovableTypesInUpdateStmt(UpdateStmt updateStmt, Statement parent, ClassDecl classDecl, ModuleDefinition module)
+        {
+            foreach (var expr in updateStmt.Rhss) {
+                if(!IsAssignmentLemmaCall(expr, classDecl, module)) continue;
+                if (!_lemmaCalls.ContainsKey(parent)) 
+                    _lemmaCalls.Add(parent, new List<UpdateStmt>());
+                _lemmaCalls[parent].Add(updateStmt);
             }
-            else {
-                //Console.WriteLine("Unrecognised statement on line " + statement.Tok.line);
-            }
+        }
+
+        private bool IsAssignmentLemmaCall(AssignmentRhs expr, ClassDecl classDecl, ModuleDefinition module)
+        {
+            var exprRhs = expr as ExprRhs;
+            if (exprRhs == null) return false;
+            if (!(exprRhs.Expr is ApplySuffix)) return false;
+            return IsCallToGhost((ApplySuffix)exprRhs.Expr, classDecl, module);
         }
 
         #endregion
 
         #region Lemma Calls
 
-        private bool IsCallToGhost(ApplySuffix expr, ClassDecl classDecl, ModuleDefinition module)
+        private bool IsCallToGhost(SuffixExpr expr, ClassDecl classDecl, ModuleDefinition module)
         {
-            string name = "";
-            if (expr.Lhs is NameSegment) {
-                NameSegment nameSeg = (NameSegment) expr.Lhs;
+            var name = "";
+            var nameSeg = expr.Lhs as NameSegment;
+            if (nameSeg != null)
                 name = nameSeg.Name;
-            }
 
-            // Look through all the methods in its current scope
-            foreach (var method in _allMethods[module][classDecl]) {
-                if (method.Name == name) {
-                    return method.IsGhost;
-                }
-            }
-            return false;
+            // Look through all the methods within the current scope and return whether it is ghost or not
+            return (from method in _allMethods[module][classDecl] where method.Name == name select method.IsGhost).FirstOrDefault();
         }
 
 
         public List<UpdateStmt> FindRemovableLemmaCalls()
         {
             List<UpdateStmt> removableLemmaCalls = new List<UpdateStmt>();
-
+            Statement parentStatement;
             foreach (Statement stmt in _lemmaCalls.Keys) {
-                if (stmt is BlockStmt) {
-                    BlockStmt block = (BlockStmt) stmt;
-//                    for (int i = _lemmaCalls[block].Count - 1; i >= 0; i--) {
-//                        UpdateStmt lemmaCall = _lemmaCalls[block][i];
-                    foreach (var lemmaCall in LemmaCalls[block]) {
-                        Console.WriteLine("At lemma at " + lemmaCall.Tok.line + ", valid: " + IsProgramValid());
-                        int index = block.Body.IndexOf(lemmaCall);
-                        block.Body.Remove(lemmaCall);
-                        if (!IsProgramValid()) {
-                            //for some reason this passes when it shouldnt
-                            block.Body.Insert(index, lemmaCall);
-                        }
-                        else {
-                            removableLemmaCalls.Add(lemmaCall);
-                        }
-                    }
-                }
+                var blockStmt = stmt as BlockStmt;
+                if (blockStmt != null)
+                    foreach (var lemmaCall in LemmaCalls[blockStmt])
+                        TryRemoveLemmaCall(blockStmt.Body, lemmaCall, removableLemmaCalls);
                 else if (stmt is MatchStmt) {}
+                //TODO: Somethign about match cases for lemma calls
             }
-
             return removableLemmaCalls;
+        }
+
+        private void TryRemoveLemmaCall(List<Statement> parentBody,  UpdateStmt lemmaCall, List<UpdateStmt>removableLemmaCalls)
+        {
+            var index = parentBody.IndexOf(lemmaCall);
+            parentBody.Remove(lemmaCall);
+            if (!IsProgramValid())
+                parentBody.Insert(index, lemmaCall);
+            else 
+                removableLemmaCalls.Add(lemmaCall);
         }
 
         #endregion
@@ -397,7 +381,6 @@ namespace shorty
                     removeableDecreases.Add(expr);
                 }
             }
-
 
             return removeableDecreases;
         }

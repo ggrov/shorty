@@ -49,6 +49,15 @@ namespace shorty
             Program program = GetProgram("FindZero.dfy");
             Shorty shorty = new Shorty(program);
 
+            // Count asserts before
+            int numberOfAsserts = 0;
+            foreach (var method in shorty.Asserts.Keys) {
+                foreach (var block in shorty.Asserts[method].Keys) {
+                    numberOfAsserts += shorty.Asserts[method][block].Count;
+                }
+            }
+            Assert.AreEqual(numberOfAsserts, 2);
+            //Number that are removed
             Assert.AreEqual(shorty.FindUnnecessaryAsserts().Count, 1);
         }
 
@@ -74,6 +83,15 @@ namespace shorty
             Assert.AreEqual(removableDecreases.Count, 0);
         }
 
-        public void LemmaCallRemoval() {}
+        [Test]
+        public void LemmaCallRemoval()
+        {
+            Initialise();
+            Program program = GetProgram("Streams.dfy");
+            Shorty shorty = new Shorty(program);
+
+            List<UpdateStmt> lemmaCalls = shorty.FindRemovableLemmaCalls();
+            Assert.AreEqual(lemmaCalls.Count, 8);
+        }
     }
 }
