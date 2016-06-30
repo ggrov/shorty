@@ -150,7 +150,7 @@ namespace shorty
                 }
 
                 Console.WriteLine("Finding unnecesary asserts");
-                List<AssertStmt> asserts = shorty.FindUnnecessaryAsserts();
+                List<AssertStmt> asserts = shorty.FindRemovableAsserts();
                 shorty.GetSimplifiedAsserts();
                 if (asserts == null) {
                     Console.WriteLine("Finding unnecessary asserts failed");

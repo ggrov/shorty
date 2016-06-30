@@ -174,7 +174,7 @@ namespace shorty
 
                     var sw = new Stopwatch();
                     sw.Start();
-                    var asserts = shorty.FindUnnecessaryAsserts();
+                    var asserts = shorty.FindRemovableAsserts();
                     sw.Stop();
 
                     if (asserts == null) {

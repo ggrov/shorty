@@ -13,7 +13,6 @@ namespace shorty
         public Program Program { get; private set; }
 
         //Asserts
-        //private readonly Dictionary<Statement, List<AssertStmt>> _andAsserts = new Dictionary<Statement, List<AssertStmt>>();
         private readonly Dictionary<Method, Dictionary<Statement, List<AssertStmt>>> _asserts = new Dictionary<Method, Dictionary<Statement, List<AssertStmt>>>();
 
         public Dictionary<Method, Dictionary<Statement, List<AssertStmt>>> Asserts {
@@ -62,7 +61,6 @@ namespace shorty
 
 
         //Lemma Calls
-
         //Need to keep track of methods
         private readonly Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>> _allMethods = new Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>>();
 
@@ -121,36 +119,35 @@ namespace shorty
 
         private void IdentifyModule(ModuleDefinition module)
         {
-            if (_allMethods.ContainsKey(module))
-                return;
+            if (_allMethods.ContainsKey(module)) return;
             _allMethods.Add(module, new Dictionary<ClassDecl, List<Method>>());
             foreach (var decl in module.TopLevelDecls)
-               IdentifyTopLevelDecl(decl, module);
+               IdentifyTopLevelDecl(decl);
         }
 
-        private void IdentifyTopLevelDecl(Declaration decl, ModuleDefinition module)
+        private void IdentifyTopLevelDecl(Declaration decl)
         {
             if (decl is ClassDecl)
-                IdentifyClass((ClassDecl)decl, module);
+                IdentifyClass((ClassDecl)decl);
             else if (decl is LiteralModuleDecl){
                 LiteralModuleDecl literalModule = (LiteralModuleDecl)decl;
                 IdentifyModule(literalModule.ModuleDef);
             }
         }
 
-        private void IdentifyClass(ClassDecl classDecl, ModuleDefinition module)
+        private void IdentifyClass(ClassDecl classDecl)
         {
-            _allMethods[module].Add(classDecl, new List<Method>());
+            _allMethods[classDecl.Module].Add(classDecl, new List<Method>());
             foreach (var member in classDecl.Members)
                 if (member is Method)
-                    _allMethods[module][classDecl].Add((Method) member);
+                    _allMethods[classDecl.Module][classDecl].Add((Method)member);
         }
 
         private void FindRemovableTypesInModule(ModuleDefinition module)
         {
             foreach (var decl in module.TopLevelDecls) {
                 if (decl is ClassDecl)
-                    FindRemovableTypesInClass((ClassDecl) decl, module);
+                    FindRemovableTypesInClass((ClassDecl) decl);
                 else if (decl is LiteralModuleDecl) {
                     LiteralModuleDecl literalModule = (LiteralModuleDecl) decl;
                     FindRemovableTypesInModule(literalModule.ModuleDef);
@@ -158,20 +155,20 @@ namespace shorty
             }
         }
 
-        private void FindRemovableTypesInClass(ClassDecl classDecl, ModuleDefinition module)
+        private void FindRemovableTypesInClass(ClassDecl classDecl)
         {
             foreach (var member in classDecl.Members) {
-                FindRemovableTypesInMember(member, classDecl, module);
+                FindRemovableTypesInMember(member, classDecl);
             }
         }
 
-        private void FindRemovableTypesInMember(MemberDecl member, ClassDecl classDecl, ModuleDefinition module)
+        private void FindRemovableTypesInMember(MemberDecl member, ClassDecl classDecl)
         {
             WildCardDecreases wildCardParent = null; // The parent of the current wildCard we are tracking
             FindDecreasesTypesInMember(member, ref wildCardParent);
             var method = member as Method;
             if (method != null) 
-                FindRemovableTypesInMethod(method, wildCardParent, classDecl, module);
+                FindRemovableTypesInMethod(method, wildCardParent, classDecl);
         }
 
         private void FindDecreasesTypesInMember(MemberDecl member, ref WildCardDecreases wildCardParent)
@@ -203,57 +200,71 @@ namespace shorty
             }
         }
 
-        private void FindRemovableTypesInMethod(Method method, WildCardDecreases wildCardParent, ClassDecl classDecl, ModuleDefinition module)
+        private void FindRemovableTypesInMethod(Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
         {
+            if(method.Body == null) return;
             var block = method.Body;
             foreach (var statement in block.Body)
-                FindRemovableTypesInStatement(statement, block, method, wildCardParent, classDecl, module);
+                FindRemovableTypesInStatement(statement, block, method, wildCardParent, classDecl);
         }
 
-        private void FindRemovableTypesInStatement(Statement statement, Statement parent, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl, ModuleDefinition module)
+        private void FindRemovableTypesInStatement(Statement statement, Statement parent, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
         {
             if (statement is AssertStmt)
-                FindRemovableTypesInAssertStmt((AssertStmt)statement, parent, method);
-            else if (statement is BlockStmt) {
-                BlockStmt blockStmt = (BlockStmt) statement;
-                foreach (var stmt in blockStmt.Body) {
-                    FindRemovableTypesInStatement(stmt, statement, method, wildCardParent, classDecl, module);
-                }
-            }
-            else if (statement is IfStmt) {
-                IfStmt ifstmt = (IfStmt) statement;
-                FindRemovableTypesInStatement(ifstmt.Thn, statement, method, wildCardParent, classDecl, module);
-                FindRemovableTypesInStatement(ifstmt.Els, statement, method, wildCardParent, classDecl, module);
-            }
-            else if (statement is LoopStmt) {
-                LoopStmt loopStmt = (LoopStmt) statement;
-                GetLoopInvariants(loopStmt);
-                wildCardParent = GetDecreasesLoop(loopStmt, method, wildCardParent);
-                if (loopStmt is WhileStmt) {
-                    WhileStmt whileStmt = (WhileStmt) loopStmt;
-                    FindRemovableTypesInStatement(whileStmt.Body, statement, method, wildCardParent, classDecl, module);
-                }
-            }
-            else if (statement is MatchStmt) {
-                MatchStmt match = (MatchStmt) statement;
-                foreach (MatchCaseStmt matchCase in match.Cases) {
-                    foreach (Statement stmt in matchCase.Body) {
-                        FindRemovableTypesInStatement(stmt, statement, method, wildCardParent, classDecl, module);
-                    }
-                }
-            }
-            else if (statement is ForallStmt) {
-                ForallStmt forall = (ForallStmt) statement;
-                FindRemovableTypesInStatement(forall.Body, statement, method, wildCardParent, classDecl, module);
-            }
-            else if (statement is CalcStmt) {
-                CalcStmt calc = (CalcStmt) statement;
-                foreach (var hint in calc.Hints) {
-                    FindRemovableTypesInStatement(hint, statement, method, wildCardParent, classDecl, module);
-                }
-            }
+                FindRemovableTypesInAssertStmt((AssertStmt) statement, parent, method);
+            else if (statement is BlockStmt)
+                FindRemovableTypesInBlockStmt((BlockStmt)statement, method, wildCardParent, classDecl);
+            else if (statement is IfStmt)
+                FindRemovableTypesInIfStmt((IfStmt)statement, method, wildCardParent, classDecl);
+            else if (statement is LoopStmt)
+                FindRemovableTypesInLoopStmt((LoopStmt)statement, method, wildCardParent, classDecl);
+            else if (statement is MatchStmt)
+                FindRemovableTypesInMatchStmt((MatchStmt)statement, method, wildCardParent, classDecl);
+            else if (statement is ForallStmt) 
+                FindRemovableTypesInForallStmt((ForallStmt)statement, method, wildCardParent, classDecl);
+            else if (statement is CalcStmt) 
+                FindRemovableTypesInCalcStmt((CalcStmt)statement, method, wildCardParent, classDecl);
             else if (statement is UpdateStmt)
-                FindRemovableTypesInUpdateStmt((UpdateStmt) statement, parent, classDecl, module);
+                FindRemovableTypesInUpdateStmt((UpdateStmt) statement, parent, classDecl);
+        }
+
+        private void FindRemovableTypesInCalcStmt(CalcStmt calc, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
+        {
+            foreach (var hint in calc.Hints) 
+                FindRemovableTypesInStatement(hint, calc, method, wildCardParent, classDecl);
+        }
+
+        private void FindRemovableTypesInForallStmt(ForallStmt forall, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
+        {
+            FindRemovableTypesInStatement(forall.Body, forall, method, wildCardParent, classDecl);
+        }
+
+        private void FindRemovableTypesInMatchStmt(MatchStmt match, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
+        {
+            foreach (MatchCaseStmt matchCase in match.Cases) 
+                foreach (Statement stmt in matchCase.Body) 
+                    FindRemovableTypesInStatement(stmt, match, method, wildCardParent, classDecl);   
+        }
+
+        private void FindRemovableTypesInLoopStmt(LoopStmt loopStmt, Method method,  WildCardDecreases wildCardParent, ClassDecl classDecl)
+        {
+            GetLoopInvariants(loopStmt);
+            IdentifyRemovableDecreasesTypesInLoop(loopStmt, method, ref wildCardParent);
+            if (!(loopStmt is WhileStmt)) return;
+            WhileStmt whileStmt = (WhileStmt) loopStmt;
+            FindRemovableTypesInStatement(whileStmt.Body, loopStmt, method, wildCardParent, classDecl);
+        }
+
+        private void FindRemovableTypesInIfStmt(IfStmt ifstmt, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
+        {
+            FindRemovableTypesInStatement(ifstmt.Thn, ifstmt, method, wildCardParent, classDecl);
+            FindRemovableTypesInStatement(ifstmt.Els, ifstmt, method, wildCardParent, classDecl);
+        }
+
+        private void FindRemovableTypesInBlockStmt(BlockStmt blockStmt, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
+        {
+            foreach (var stmt in blockStmt.Body) 
+                FindRemovableTypesInStatement(stmt, blockStmt, method, wildCardParent, classDecl);
         }
 
         private void FindRemovableTypesInAssertStmt(AssertStmt assert, Statement parent, Method method)
@@ -266,29 +277,29 @@ namespace shorty
                 _asserts[method][parent].Add(assert);
         }
 
-        private void FindRemovableTypesInUpdateStmt(UpdateStmt updateStmt, Statement parent, ClassDecl classDecl, ModuleDefinition module)
+        private void FindRemovableTypesInUpdateStmt(UpdateStmt updateStmt, Statement parent, ClassDecl classDecl)
         {
             foreach (var expr in updateStmt.Rhss) {
-                if(!IsAssignmentLemmaCall(expr, classDecl, module)) continue;
+                if(!IsAssignmentLemmaCall(expr, classDecl)) continue;
                 if (!_lemmaCalls.ContainsKey(parent)) 
                     _lemmaCalls.Add(parent, new List<UpdateStmt>());
                 _lemmaCalls[parent].Add(updateStmt);
             }
         }
 
-        private bool IsAssignmentLemmaCall(AssignmentRhs expr, ClassDecl classDecl, ModuleDefinition module)
+        private bool IsAssignmentLemmaCall(AssignmentRhs expr, ClassDecl classDecl)
         {
             var exprRhs = expr as ExprRhs;
             if (exprRhs == null) return false;
             if (!(exprRhs.Expr is ApplySuffix)) return false;
-            return IsCallToGhost((ApplySuffix)exprRhs.Expr, classDecl, module);
+            return IsCallToGhost((ApplySuffix)exprRhs.Expr, classDecl);
         }
 
         #endregion
 
         #region Lemma Calls
 
-        private bool IsCallToGhost(SuffixExpr expr, ClassDecl classDecl, ModuleDefinition module)
+        private bool IsCallToGhost(SuffixExpr expr, ClassDecl classDecl)
         {
             var name = "";
             var nameSeg = expr.Lhs as NameSegment;
@@ -296,23 +307,27 @@ namespace shorty
                 name = nameSeg.Name;
 
             // Look through all the methods within the current scope and return whether it is ghost or not
-            return (from method in _allMethods[module][classDecl] where method.Name == name select method.IsGhost).FirstOrDefault();
+            return (from method in _allMethods[classDecl.Module][classDecl] where method.Name == name select method.IsGhost).FirstOrDefault();
         }
 
 
         public List<UpdateStmt> FindRemovableLemmaCalls()
         {
             List<UpdateStmt> removableLemmaCalls = new List<UpdateStmt>();
-            Statement parentStatement;
-            foreach (Statement stmt in _lemmaCalls.Keys) {
+            foreach (var stmt in _lemmaCalls.Keys) {
                 var blockStmt = stmt as BlockStmt;
                 if (blockStmt != null)
-                    foreach (var lemmaCall in LemmaCalls[blockStmt])
-                        TryRemoveLemmaCall(blockStmt.Body, lemmaCall, removableLemmaCalls);
+                    FindRemovableLemmaCallsInBlock(blockStmt, removableLemmaCalls);
                 else if (stmt is MatchStmt) {}
                 //TODO: Somethign about match cases for lemma calls
             }
             return removableLemmaCalls;
+        }
+
+        private void FindRemovableLemmaCallsInBlock(BlockStmt blockStmt, List<UpdateStmt> removableLemmaCalls)
+        {
+            foreach (var lemmaCall in LemmaCalls[blockStmt])
+                TryRemoveLemmaCall(blockStmt.Body, lemmaCall, removableLemmaCalls);
         }
 
         private void TryRemoveLemmaCall(List<Statement> parentBody,  UpdateStmt lemmaCall, List<UpdateStmt>removableLemmaCalls)
@@ -329,40 +344,39 @@ namespace shorty
 
         #region decreases
 
-        private WildCardDecreases GetDecreasesLoop(LoopStmt loop, Method method, WildCardDecreases wildCardParent)
+        private void IdentifyRemovableDecreasesTypesInLoop(LoopStmt loop, Method method, ref WildCardDecreases wildCardParent)
         {
             //Deal with wildcard decreases
-            WildCardDecreases wcd = wildCardParent;
-            int wildCardCount = 0;
             foreach (Expression expr in loop.Decreases.Expressions) {
-                if (expr is WildcardExpr) {
-                    wildCardCount++;
-                    wcd = new WildCardDecreases(expr, loop.Decreases, wildCardParent);
-                    if (wildCardParent != null) {
-                        wildCardParent.SubDecreases.Add(wcd);
-                    }
-                    else {
-                        //start a new tree as there is no current parent
-                        wildCardDecreases.Add(wcd);
-                    }
-                }
+                IdentifyDecreasesExpression(loop, method, ref wildCardParent, expr);
             }
+        }
 
-            // Deal with any normal decreases
-            if (loop.Decreases.Expressions.Count > wildCardCount) {
-                if (!_decreases.ContainsKey(method)) {
-                    _decreases.Add(method, new Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>(new List<Expression>(), new Dictionary<LoopStmt, List<Expression>>()));
-                }
-                if (!_decreases[method].Item2.ContainsKey(loop)) {
-                    _decreases[method].Item2.Add(loop, new List<Expression>());
-                }
-                foreach (var expression in loop.Decreases.Expressions) {
-                    if (!(expression is WildcardExpr)) {
-                        _decreases[method].Item2[loop].AddRange(loop.Decreases.Expressions);
-                    }
-                }
-            }
-            return wcd;
+        private void IdentifyDecreasesExpression(LoopStmt loop, Method method, ref WildCardDecreases wildCardParent, Expression expr)
+        {
+            if (expr is WildcardExpr)
+                IdentifyWildCardDecreases(loop, ref wildCardParent, expr);
+            else 
+                IdentifyNormalDecreases(loop, method, expr);
+        }
+
+        private void IdentifyNormalDecreases(LoopStmt loop, Method method, Expression expr)
+        {
+            if (!_decreases.ContainsKey(method))
+                _decreases.Add(method, new Tuple<List<Expression>, Dictionary<LoopStmt, List<Expression>>>(new List<Expression>(), new Dictionary<LoopStmt, List<Expression>>()));
+            if (!_decreases[method].Item2.ContainsKey(loop))
+                _decreases[method].Item2.Add(loop, new List<Expression>());
+            _decreases[method].Item2[loop].Add(expr);
+        }
+
+        private void IdentifyWildCardDecreases(LoopStmt loop, ref WildCardDecreases wildCardParent, Expression expr)
+        {
+            var newWildCard = new WildCardDecreases(expr, loop.Decreases, wildCardParent);
+            if (wildCardParent != null)
+                wildCardParent.SubDecreases.Add(newWildCard);
+            else
+                wildCardDecreases.Add(newWildCard); // There is no parent - add new one
+            wildCardParent = newWildCard;
         }
 
         public List<Expression> RemoveDecreasesFromParent(List<Expression> decreases)
@@ -370,83 +384,93 @@ namespace shorty
             List<Expression> removeableDecreases = new List<Expression>();
 
             for (int i = decreases.Count - 1; i >= 0; i--) {
-                Expression expr = decreases[i];
-                if (expr == null || expr is WildcardExpr) continue; //wildcards found afterwards
-                decreases.Remove(expr);
-                if (!IsProgramValid()) {
-                    Console.WriteLine("\nCannot remove decreases at " + expr.tok.line + "\n");
-                    decreases.Insert(i, expr);
-                }
-                else {
-                    removeableDecreases.Add(expr);
-                }
+                RemoveSingleDecreasesFromParent(decreases, i, removeableDecreases);
             }
 
             return removeableDecreases;
+        }
+
+        private void RemoveSingleDecreasesFromParent(List<Expression> decreases, int position, List<Expression> removeableDecreases)
+        {
+            var expr = decreases[position];
+            if (expr == null || expr is WildcardExpr) return;
+            decreases.RemoveAt(position);
+            if (!IsProgramValid()) 
+                decreases.Insert(position, expr);
+            else 
+                removeableDecreases.Add(expr);
         }
 
         public List<Expression> FindRemoveableDecreases()
         {
             List<Expression> removeableDecreases = new List<Expression>();
-
             foreach (MemberDecl member in _decreases.Keys) {
-                //Remove from member
-                if (member is Method) {
-                    var method = (Method) member;
-                    removeableDecreases.AddRange(RemoveDecreasesFromParent(method.Decreases.Expressions));
-                }
-                else if (member is Function) {
-                    var function = (Function) member;
-                    removeableDecreases.AddRange(RemoveDecreasesFromParent(function.Decreases.Expressions));
-                }
-                foreach (var loop in _decreases[member].Item2.Keys) {
-                    //remove from loops
-                    removeableDecreases.AddRange(RemoveDecreasesFromParent(loop.Decreases.Expressions));
-                }
+                FindRemovableDecreasesInMember(member, removeableDecreases);
+                FindRemovableDecreasesInMembersLoops(member, removeableDecreases);
             }
-
-            removeableDecreases.AddRange(FindRemovableWildCards()); //remove wildcards
-
+            //We also have to find removable wildcards which are stored differently
+            removeableDecreases.AddRange(FindRemovableWildCards()); 
             return removeableDecreases;
+        }
+
+        private void FindRemovableDecreasesInMembersLoops(MemberDecl member, List<Expression> removeableDecreases)
+        {
+            foreach (var loop in _decreases[member].Item2.Keys) 
+                removeableDecreases.AddRange(RemoveDecreasesFromParent(loop.Decreases.Expressions));
+        }
+
+        private void FindRemovableDecreasesInMember(MemberDecl member, List<Expression> removeableDecreases)
+        {
+            if (member is Method) {
+                var method = (Method) member;
+                removeableDecreases.AddRange(RemoveDecreasesFromParent(method.Decreases.Expressions));
+            }
+            else if (member is Function) {
+                var function = (Function) member;
+                removeableDecreases.AddRange(RemoveDecreasesFromParent(function.Decreases.Expressions));
+            }
         }
 
         private List<Expression> FindRemovableWildCards()
         {
             List<Expression> removableWildCards = new List<Expression>();
-            foreach (var wcDecreases in wildCardDecreases) {
+            foreach (var wcDecreases in wildCardDecreases)
                 removableWildCards.AddRange(FindRemovableWildCards(wcDecreases).Item1);
-            }
             return removableWildCards;
         }
 
-        public Tuple<List<Expression>, bool> FindRemovableWildCards(WildCardDecreases wcd)
+        private Tuple<List<Expression>, bool> FindRemovableWildCards(WildCardDecreases currentWildCardDecreases)
         {
             var removableWildCards = new List<Expression>();
-            bool valid = true; //makes sure it is valid to 
-            //First off try and remove all lower wildcards
+            bool safeToRemove = true;
+            RemoveWildCardSubDecreases(currentWildCardDecreases, removableWildCards, ref safeToRemove);
+
+            if (safeToRemove) 
+                RemoveWildCardDecreases(currentWildCardDecreases, removableWildCards, ref safeToRemove);
+
+            return new Tuple<List<Expression>, bool>(removableWildCards, safeToRemove);
+        }
+
+        private void RemoveWildCardDecreases(WildCardDecreases currentWildCardDecreases, List<Expression> removableWildCards, ref bool safeToRemove)
+        {
+            int index = currentWildCardDecreases.ParentSpecification.Expressions.IndexOf(currentWildCardDecreases.Expression);
+            currentWildCardDecreases.ParentSpecification.Expressions.Remove(currentWildCardDecreases.Expression);
+            if (IsProgramValid())
+                removableWildCards.Add(currentWildCardDecreases.Expression);
+            else {
+                currentWildCardDecreases.ParentSpecification.Expressions.Insert(index, currentWildCardDecreases.Expression);
+                safeToRemove = false;
+            }
+        }
+
+        private void RemoveWildCardSubDecreases(WildCardDecreases wcd, List<Expression> removableWildCards, ref bool safeToRemove)
+        {
             foreach (var subDec in wcd.SubDecreases) {
                 var removableWCs = FindRemovableWildCards(subDec);
                 removableWildCards.AddRange(removableWCs.Item1);
-                if (valid) {
-                    valid = removableWCs.Item2;
-                }
+                if (safeToRemove) 
+                    safeToRemove = removableWCs.Item2;
             }
-
-            //at bottom level or all lower have been removed - safe to try and remove
-            if (valid) {
-                int index = wcd.ParentSpecification.Expressions.IndexOf(wcd.Expression);
-                wcd.ParentSpecification.Expressions.Remove(wcd.Expression);
-                if (IsProgramValid()) {
-                    //successfully removed
-                    removableWildCards.Add(wcd.Expression);
-                }
-                else {
-                    valid = false;
-                    wcd.ParentSpecification.Expressions.Insert(index, wcd.Expression);
-                }
-            }
-
-            return new Tuple<List<Expression>, bool>(removableWildCards, valid);
         }
 
         #endregion
@@ -462,27 +486,25 @@ namespace shorty
         public List<MaybeFreeExpression> FindRemovableInvariants()
         {
             List<MaybeFreeExpression> removeableInvariants = new List<MaybeFreeExpression>();
-
-            foreach (var loopStmt in _invariants.Keys) {
-                List<MaybeFreeExpression> invariantList = _invariants[loopStmt];
-
-                for (int i = invariantList.Count - 1; i >= 0; i--) {
-                    if (invariantList[i] == null)
-                        continue;
-                    MaybeFreeExpression invariant = invariantList[i];
-                    invariantList.Remove(invariant);
-                    Console.WriteLine("Removing at line {0}", invariant.E.tok.line);
-                    if (!IsProgramValid()) {
-                        Console.WriteLine("Failed at line {0}", invariant.E.tok.line);
-                        invariantList.Insert(i, invariant);
-                    }
-                    else {
-                        removeableInvariants.Add(invariant);
-                        Console.WriteLine("Succeeded at line {0}", invariant.E.tok.line);
-                    }
-                }
-            }
+            foreach (var loopStmt in _invariants.Keys) 
+                FindRemoveableInvariantsInLoop(_invariants[loopStmt], removeableInvariants);
             return removeableInvariants;
+        }
+
+        private void FindRemoveableInvariantsInLoop(List<MaybeFreeExpression> invariantList, List<MaybeFreeExpression> removeableInvariants)
+        {
+            for (int i = invariantList.Count - 1; i >= 0; i--) 
+                TryToRemoveInvariant(invariantList, removeableInvariants, i);
+        }
+
+        private void TryToRemoveInvariant(List<MaybeFreeExpression> invariantList, List<MaybeFreeExpression> removeableInvariants, int position)
+        {
+            MaybeFreeExpression invariant = invariantList[position];
+            invariantList.Remove(invariant);
+            if (!IsProgramValid())
+                invariantList.Insert(position, invariant);
+            else
+                removeableInvariants.Add(invariant);
         }
 
         #endregion
@@ -493,12 +515,10 @@ namespace shorty
         {
             int count = 0;
             foreach (var block in _asserts[method].Keys) {
-                if (count + _asserts[method][block].Count - 1 < index) {
+                if (count + _asserts[method][block].Count - 1 < index) 
                     count += _asserts[method][block].Count - 1;
-                }
-                else {
+                else 
                     return _asserts[method][block][index - count];
-                }
             }
             return null;
         }
@@ -529,17 +549,15 @@ namespace shorty
         public Dictionary<Method, List<List<AssertStmt>>> TestDifferentRemovals()
         {
             Dictionary<Method, List<List<AssertStmt>>> returnData = new Dictionary<Method, List<List<AssertStmt>>>();
-
-
             foreach (Method method in _asserts.Keys) {
                 List<List<AssertStmt>> solutions = new List<List<AssertStmt>>();
-                TestRemovals(0, solutions, new List<AssertStmt>(), method);
+                TestAssertRemovalOrdering(0, solutions, new List<AssertStmt>(), method);
                 returnData.Add(method, solutions);
             }
             return returnData;
         }
 
-        private void TestRemovals(int index, List<List<AssertStmt>> solutions, List<AssertStmt> currentSolution, Method method)
+        private void TestAssertRemovalOrdering(int index, List<List<AssertStmt>> solutions, List<AssertStmt> currentSolution, Method method)
         {
             if (index == CountAsserts(method)) {
                 solutions.Add(new List<AssertStmt>(currentSolution));
@@ -555,13 +573,13 @@ namespace shorty
                 block.Body.Remove(assert);
                 if (IsProgramValid()) {
                     var newCurrentSolution = new List<AssertStmt>(currentSolution) {assert}; //create a copy of the currentSolution and add in the assert
-                    TestRemovals(index + 1, solutions, newCurrentSolution, method);
+                    TestAssertRemovalOrdering(index + 1, solutions, newCurrentSolution, method);
                     block.Body.Insert(assertPos, assert);
-                    TestRemovals(index + 1, solutions, currentSolution, method);
+                    TestAssertRemovalOrdering(index + 1, solutions, currentSolution, method);
                 }
                 else {
                     block.Body.Insert(assertPos, assert);
-                    TestRemovals(index + 1, solutions, currentSolution, method);
+                    TestAssertRemovalOrdering(index + 1, solutions, currentSolution, method);
                 }
             }
             else if (parent is MatchStmt) {
@@ -574,13 +592,13 @@ namespace shorty
                         matchCase.Body.Remove(assert);
                         if (IsProgramValid()) {
                             var newCurrentSolution = new List<AssertStmt>(currentSolution) {assert}; //create a copy of the currentSolution and add in the assert
-                            TestRemovals(index + 1, solutions, newCurrentSolution, method);
+                            TestAssertRemovalOrdering(index + 1, solutions, newCurrentSolution, method);
                             matchCase.Body.Insert(assertPos, assert);
-                            TestRemovals(index + 1, solutions, currentSolution, method);
+                            TestAssertRemovalOrdering(index + 1, solutions, currentSolution, method);
                         }
                         else {
                             matchCase.Body.Insert(assertPos, assert);
-                            TestRemovals(index + 1, solutions, currentSolution, method);
+                            TestAssertRemovalOrdering(index + 1, solutions, currentSolution, method);
                         }
                     }
                 }
@@ -673,7 +691,6 @@ namespace shorty
             if (assert.Expr is BinaryExpr) {
                 BinaryExpr expr = (BinaryExpr) assert.Expr;
                 if (expr.Op == BinaryExpr.Opcode.And) {
-//or or statements or anything else???
                     AssertStmt newAssert = new AssertStmt(expr.tok, assert.EndTok, expr.E0, assert.Attributes);
                     AssertStmt newAssert2 = new AssertStmt(expr.tok, assert.EndTok, expr.E1, assert.Attributes);
 
@@ -686,54 +703,60 @@ namespace shorty
             return brokenAsserts;
         }
 
-        public List<AssertStmt> FindUnnecessaryAsserts()
+        public List<AssertStmt> FindRemovableAsserts()
         {
             List<AssertStmt> removedAsserts = new List<AssertStmt>();
-
             if (!IsProgramValid()) {
                 Console.WriteLine("Program " + Program.FullName + " cannot verify -> cannot remove asserts until it is fixed");
                 return null;
             }
+            foreach (var method in _asserts.Keys)
+                removedAsserts.AddRange(FindRemovableAssertsInMethod(method));
+            return removedAsserts;
+        }
 
-            //go through each block
+        private List<AssertStmt> FindRemovableAssertsInMethod(Method method)
+        {
+            List<AssertStmt> removedAsserts = new List<AssertStmt>();
+            foreach (Statement stmt in _asserts[method].Keys) {
+                if (stmt is BlockStmt)
+                    removedAsserts.AddRange(FindRemovableAssertInBlockStmt((BlockStmt) stmt, method));
+                else if (stmt is MatchStmt)
+                    removedAsserts.AddRange(FindRemovableAssertsInMatchStmt((MatchStmt) stmt, method));
+            }
+            return removedAsserts;
+        }
 
-            foreach (var method in _asserts.Keys) {
-                foreach (Statement stmnt in _asserts[method].Keys) {
-                    if (stmnt is BlockStmt) {
-                        BlockStmt bl = (BlockStmt) stmnt;
-                        foreach (AssertStmt assert in _asserts[method][stmnt]) {
-                            int index = bl.Body.IndexOf(assert);
-                            bl.Body.Remove(assert);
-                            if (!IsProgramValid()) {
-                                bl.Body.Insert(index, assert);
-                            }
-                            else if (!removedAsserts.Contains(assert)) {
-                                removedAsserts.Add(assert);
-                            }
-                        }
-                    }
-                    // Match statements are not stored in a block or inherited from notmal statements so we need a special case from them
-                    else if (stmnt is MatchStmt) {
-                        MatchStmt ms = (MatchStmt) stmnt;
-                        foreach (AssertStmt assert in _asserts[method][stmnt]) {
-                            foreach (MatchCaseStmt mcs in ms.Cases) {
-                                mcs.Body.Remove(assert);
-                                if (!removedAsserts.Contains(assert)) {
-                                    removedAsserts.Add(assert);
-                                }
-                                if (!IsProgramValid()) {
-                                    mcs.Body.Add(assert);
-                                }
-                                else {
-                                    if (!removedAsserts.Contains(assert)) {
-                                        removedAsserts.Add(assert);
-                                    }
-                                }
-                            }
-                        }
-                    }
+        private List<AssertStmt> FindRemovableAssertsInMatchStmt(MatchStmt stmt, Method method)
+        {
+            List<AssertStmt> removedAsserts = new List<AssertStmt>();
+            foreach (AssertStmt assert in _asserts[method][stmt]) {
+                foreach (MatchCaseStmt mcs in stmt.Cases) {
+                    if (!mcs.Body.Contains(assert)) continue;
+                    removedAsserts.AddRange(TryRemoveAssert(mcs.Body, mcs.Body.IndexOf(assert)));
+                    break;
                 }
             }
+            return removedAsserts;
+        }
+
+        private List<AssertStmt> FindRemovableAssertInBlockStmt(BlockStmt stmt, Method method)
+        {
+            List<AssertStmt> removedAsserts = new List<AssertStmt>();
+            foreach (AssertStmt assert in _asserts[method][stmt])
+                removedAsserts.AddRange(TryRemoveAssert(stmt.Body, stmt.Body.IndexOf(assert)));
+            return removedAsserts;
+        }
+
+        private List<AssertStmt> TryRemoveAssert(List<Statement> parent, int position)
+        {
+            List<AssertStmt> removedAsserts = new List<AssertStmt>();
+            var assert = (AssertStmt)parent[position];
+            parent.Remove(assert);
+            if (!IsProgramValid())
+                parent.Insert(position, assert);
+            else if (!removedAsserts.Contains(assert)) 
+                removedAsserts.Add(assert);
             return removedAsserts;
         }
 
@@ -752,77 +775,36 @@ namespace shorty
 
         public bool IsProgramValid()
         {
-            Contract.Requires(Program != null);
-            string programId = "main_program_id";
-            Bpl.PipelineStatistics stats = new Bpl.PipelineStatistics();
-
-            var translator = new Translator(new ConsoleErrorReporter());
-            Program programCopy = CloneProgram(Program);
-
-            var resolver = new Resolver(programCopy);
             try {
+                var programId = "main_program_id";
+                var stats = new Bpl.PipelineStatistics();
+                var translator = new Translator(new ConsoleErrorReporter());
+                var programCopy = CloneProgram(Program);
+                var resolver = new Resolver(programCopy);
                 resolver.ResolveProgram(programCopy);
+                var boogieProgram = translator.Translate(programCopy);
+                var bplFileName = "bplFile";
+                Bpl.LinearTypeChecker ltc;
+                Bpl.CivlTypeChecker ctc;
+
+                var oc = Bpl.ExecutionEngine.ResolveAndTypecheck(boogieProgram, bplFileName, out ltc, out ctc);
+                if (oc != Bpl.PipelineOutcome.ResolvedAndTypeChecked) return false;
+
+                Bpl.ExecutionEngine.EliminateDeadVariables(boogieProgram);
+                Bpl.ExecutionEngine.CollectModSets(boogieProgram);
+                Bpl.ExecutionEngine.CoalesceBlocks(boogieProgram);
+                Bpl.ExecutionEngine.Inline(boogieProgram);
+                Bpl.ErrorReporterDelegate er = BoogieErrorInformation;
+
+                oc = Bpl.ExecutionEngine.InferAndVerify(boogieProgram, stats, programId, er);
+
+                var allOk = stats.ErrorCount == 0 && stats.InconclusiveCount == 0 && stats.TimeoutCount == 0 && stats.OutOfMemoryCount == 0;
+                Console.WriteLine(!allOk ? "Verification failed" : "Verification Successful");
+                return oc == Bpl.PipelineOutcome.VerificationCompleted && allOk;
             }
             catch {
-                Console.WriteLine("Failed to resolve program");
+                Console.WriteLine("Verification failed");
                 return false;
-            }
-
-            Bpl.Program boogieProgram;
-            try {
-                boogieProgram = translator.Translate(programCopy);
-            }
-            catch {
-                Console.WriteLine("Program " + programCopy.FullName + "failed to translate.");
-                return false;
-            }
-
-            var bplFileName = "bplFile";
-            Bpl.LinearTypeChecker ltc;
-            Bpl.CivlTypeChecker ctc;
-
-            var oc = Bpl.ExecutionEngine.ResolveAndTypecheck(boogieProgram, bplFileName, out ltc, out ctc);
-            switch (oc) {
-                case Bpl.PipelineOutcome.ResolutionError:
-                    return false;
-                case Bpl.PipelineOutcome.TypeCheckingError:
-                    return false;
-                case Bpl.PipelineOutcome.ResolvedAndTypeChecked:
-                    Bpl.ExecutionEngine.EliminateDeadVariables(boogieProgram);
-                    Bpl.ExecutionEngine.CollectModSets(boogieProgram);
-                    Bpl.ExecutionEngine.CoalesceBlocks(boogieProgram);
-                    Bpl.ExecutionEngine.Inline(boogieProgram);
-
-                    Bpl.ErrorReporterDelegate er = BoogieErrorInformation;
-                    try {
-                        oc = Bpl.ExecutionEngine.InferAndVerify(boogieProgram, stats, programId, er);
-                    }
-                    catch {
-                        Console.WriteLine("Verification caused exception");
-                        return false;
-                    }
-                    var allOk = stats.ErrorCount == 0 && stats.InconclusiveCount == 0 && stats.TimeoutCount == 0 && stats.OutOfMemoryCount == 0;
-                    if (!allOk) {
-                        //The program failed to verify - we must now find the allAsserts from the list of tokens we got.
-                        Console.WriteLine("Verification failed");
-                    }
-                    switch (oc) {
-                        case Bpl.PipelineOutcome.VerificationCompleted:
-                            if (allOk) Console.WriteLine("Verification successful");
-                            return allOk;
-
-                        case Bpl.PipelineOutcome.Done:
-                            if (allOk) Console.WriteLine("Verification successful");
-                            return allOk;
-                        default:
-                            return false;
-                    }
-                case Bpl.PipelineOutcome.FatalError:
-                    return false;
-                case Bpl.PipelineOutcome.VerificationCompleted:
-                    return true;
-                default:
-                    return false;
             }
         }
 

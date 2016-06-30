@@ -58,7 +58,7 @@ namespace shorty
             }
             Assert.AreEqual(numberOfAsserts, 2);
             //Number that are removed
-            Assert.AreEqual(shorty.FindUnnecessaryAsserts().Count, 1);
+            Assert.AreEqual(shorty.FindRemovableAsserts().Count, 1);
         }
 
         [Test]
