@@ -50,15 +50,15 @@ namespace shorty
             Shorty shorty = new Shorty(program);
 
             // Count asserts before
-            int numberOfAsserts = 0;
-            foreach (var method in shorty.Asserts.Keys) {
-                foreach (var block in shorty.Asserts[method].Keys) {
-                    numberOfAsserts += shorty.Asserts[method][block].Count;
-                }
-            }
-            Assert.AreEqual(numberOfAsserts, 2);
+            int numberOfAsserts = shorty.Asserts.Count;
+//            foreach (var method in shorty.Asserts.Keys) {
+//                foreach (var block in shorty.Asserts[method].Keys) {
+//                    numberOfAsserts += shorty.Asserts[method][block].Count;
+//                }
+//            }
+            Assert.AreEqual(2, numberOfAsserts);
             //Number that are removed
-            Assert.AreEqual(shorty.FindRemovableAsserts().Count, 1);
+            Assert.AreEqual(1, shorty.FindRemovableAsserts().Count);
         }
 
         [Test]
@@ -68,7 +68,7 @@ namespace shorty
             Program program = GetProgram("ListCopy.dfy");
             Shorty shorty = new Shorty(program);
 
-            Assert.AreEqual(shorty.FindRemovableInvariants().Count, 2);
+            Assert.AreEqual(2, shorty.FindRemovableInvariants().Count);
         }
 
         [Test]
@@ -80,7 +80,7 @@ namespace shorty
 
             List<Expression> removableDecreases = shorty.FindRemoveableDecreases();
 
-            Assert.AreEqual(removableDecreases.Count, 0);
+            Assert.AreEqual(0, removableDecreases.Count);
         }
 
         [Test]
@@ -91,7 +91,19 @@ namespace shorty
             Shorty shorty = new Shorty(program);
 
             List<UpdateStmt> lemmaCalls = shorty.FindRemovableLemmaCalls();
-            Assert.AreEqual(lemmaCalls.Count, 8);
+            Assert.AreEqual(8, lemmaCalls.Count);
+        }
+
+        [Test]
+        public void SimplifyAsserts()
+        {
+            Initialise();
+            Program program = GetProgram("CombinedAsserts.dfy");
+            Shorty shorty = new Shorty(program);
+
+            List<Tuple<AssertStmt, AssertStmt>> simplifiedAsserts = shorty.GetSimplifiedAsserts();
+            Assert.AreEqual(1, simplifiedAsserts.Count);
+            //TODO more asserts looking into the assertStmt
         }
     }
 }

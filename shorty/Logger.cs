@@ -165,11 +165,11 @@ namespace shorty
                     
                     if (i == 0) {
                         //Find out how many asserts were in the program before the removal - only do on first run
-                        foreach (var method in shorty.Asserts.Keys) {
-                            foreach (var stmt in shorty.Asserts[method].Keys) {
-                                assertsBefore += shorty.Asserts[method][stmt].Count;                                
-                            }
-                        }
+//                        foreach (var method in shorty.Asserts.Keys) {
+//                            foreach (var stmt in shorty.Asserts[method].Keys) {
+//                                assertsBefore += shorty.Asserts[method][stmt].Count;                                
+//                            }
+//                        }
                     }
 
                     var sw = new Stopwatch();
@@ -228,9 +228,7 @@ namespace shorty
 
                     if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
-                        foreach (var stmt in shorty.Invariants.Keys) {
-                            invariantsBefore += shorty.Invariants[stmt].Count;
-                        }
+                        invariantsBefore = shorty.Invariants.Count;
                     }
 
                     var sw = new Stopwatch();
@@ -348,14 +346,9 @@ namespace shorty
                     
                     if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
-                        foreach (var method in shorty.Decreases.Keys) {
-                            decreasesBefore += shorty.Decreases[method].Item1.Count;
-                            foreach (var loop in shorty.Decreases[method].Item2.Keys) {
-                                decreasesBefore += shorty.Decreases[method].Item2[loop].Count;
-                            }
-                        }
-                        foreach (var wildCardDecreases in shorty.wildCardDecreases) {
-                            decreasesBefore += wildCardDecreases.Count();
+                        decreasesBefore = shorty.Decreases.Count;
+                        foreach (var wildCardDecreases in shorty.DecreasesWildCards) {
+                            decreasesBefore += wildCardDecreases.Count;
                         }
                     }
 
