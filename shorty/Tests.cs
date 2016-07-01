@@ -49,15 +49,8 @@ namespace shorty
             Program program = GetProgram("FindZero.dfy");
             Shorty shorty = new Shorty(program);
 
-            // Count asserts before
             int numberOfAsserts = shorty.Asserts.Count;
-//            foreach (var method in shorty.Asserts.Keys) {
-//                foreach (var block in shorty.Asserts[method].Keys) {
-//                    numberOfAsserts += shorty.Asserts[method][block].Count;
-//                }
-//            }
             Assert.AreEqual(3, numberOfAsserts);
-            //Number that are removed
             Assert.AreEqual(2, shorty.FindRemovableAsserts().Count);
         }
 
@@ -78,7 +71,7 @@ namespace shorty
             Program program = GetProgram("Combinators.dfy");
             Shorty shorty = new Shorty(program);
 
-            List<Expression> removableDecreases = shorty.FindRemoveableDecreases();
+            List<Expression> removableDecreases = shorty.FindRemovableDecreases();
 
             Assert.AreEqual(1, removableDecreases.Count);
         }
@@ -104,23 +97,6 @@ namespace shorty
             List<Tuple<AssertStmt, AssertStmt>> simplifiedAsserts = shorty.GetSimplifiedAsserts();
             Assert.AreEqual(1, simplifiedAsserts.Count);
             //TODO looking into the assertStmt to make sure it actually broke down
-        }
-
-        [Test]
-        public void ProgramIsNullException()
-        {
-            Initialise();
-            Program program = null;
-            int i = 1;
-            try {
-                Shorty shorty = new Shorty(program);
-            }
-            catch {
-                i++;
-            }
-            finally {
-                Assert.IsTrue(false);
-            }
         }
     }
 }

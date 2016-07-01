@@ -167,7 +167,7 @@ namespace shorty
                 }
 
                 Console.WriteLine("Finding unnecessary loop invariants");
-                List<Expression> decreases = shorty.FindRemoveableDecreases();
+                List<Expression> decreases = shorty.FindRemovableDecreases();
                 if (decreases == null) {
                     Console.WriteLine("Finding decreases failed");
                     continue;

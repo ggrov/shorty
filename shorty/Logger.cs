@@ -351,7 +351,7 @@ namespace shorty
 
                     var sw = new Stopwatch();
                     sw.Start();
-                    var decreases = shorty.FindRemoveableDecreases();
+                    var decreases = shorty.FindRemovableDecreases();
                     sw.Stop();
                     if (decreases == null) {
                         _tw.WriteLine(program.Name + "Failed to find decreases");
