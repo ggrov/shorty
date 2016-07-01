@@ -49,9 +49,9 @@ namespace shorty
             Program program = GetProgram("FindZero.dfy");
             Shorty shorty = new Shorty(program);
 
-            int numberOfAsserts = shorty.Asserts.Count;
-            Assert.AreEqual(3, numberOfAsserts);
+            Assert.AreEqual(3, shorty.Asserts.Count);
             Assert.AreEqual(2, shorty.FindRemovableAsserts().Count);
+            Assert.AreEqual(1, shorty.Asserts.Count);
         }
 
         [Test]
@@ -61,7 +61,9 @@ namespace shorty
             Program program = GetProgram("ListCopy.dfy");
             Shorty shorty = new Shorty(program);
 
+            Assert.AreEqual(6, shorty.Invariants.Count);
             Assert.AreEqual(2, shorty.FindRemovableInvariants().Count);
+            Assert.AreEqual(4, shorty.Invariants.Count);
         }
 
         [Test]
@@ -71,9 +73,9 @@ namespace shorty
             Program program = GetProgram("Combinators.dfy");
             Shorty shorty = new Shorty(program);
 
-            List<Expression> removableDecreases = shorty.FindRemovableDecreases();
-
-            Assert.AreEqual(1, removableDecreases.Count);
+            Assert.AreEqual(4, shorty.Decreases.Count + shorty.DecreasesWildCards.Count);
+            Assert.AreEqual(1, shorty.FindRemovableDecreases().Count);
+            Assert.AreEqual(3, shorty.Decreases.Count + shorty.DecreasesWildCards.Count);
         }
 
         [Test]
@@ -83,8 +85,9 @@ namespace shorty
             Program program = GetProgram("Streams.dfy");
             Shorty shorty = new Shorty(program);
 
-            List<UpdateStmt> lemmaCalls = shorty.FindRemovableLemmaCalls();
-            Assert.AreEqual(17, lemmaCalls.Count);
+            Assert.AreEqual(21, shorty.LemmaCalls.Count);
+            Assert.AreEqual(17, shorty.FindRemovableLemmaCalls().Count);
+            Assert.AreEqual(4, shorty.LemmaCalls.Count);
         }
 
         [Test]
