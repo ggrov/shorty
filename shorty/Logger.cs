@@ -283,12 +283,9 @@ namespace shorty
                     //Find the verificaiton time before the shorty method is run
                     averageTimeBefore += FindExecutionTime(programClone);
 
-                    if (i == 0)
-                    {
+                    if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
-                        foreach (var stmt in shorty.LemmaCalls.Keys) {
-                            lemmaCallsBefore += shorty.LemmaCalls[stmt].Count;
-                        }
+                        lemmaCallsBefore = shorty.LemmaCalls.Count;
                     }
 
                     var sw = new Stopwatch();

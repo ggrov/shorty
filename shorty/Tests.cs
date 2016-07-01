@@ -56,9 +56,9 @@ namespace shorty
 //                    numberOfAsserts += shorty.Asserts[method][block].Count;
 //                }
 //            }
-            Assert.AreEqual(2, numberOfAsserts);
+            Assert.AreEqual(3, numberOfAsserts);
             //Number that are removed
-            Assert.AreEqual(1, shorty.FindRemovableAsserts().Count);
+            Assert.AreEqual(2, shorty.FindRemovableAsserts().Count);
         }
 
         [Test]
@@ -80,7 +80,7 @@ namespace shorty
 
             List<Expression> removableDecreases = shorty.FindRemoveableDecreases();
 
-            Assert.AreEqual(0, removableDecreases.Count);
+            Assert.AreEqual(1, removableDecreases.Count);
         }
 
         [Test]
@@ -91,7 +91,7 @@ namespace shorty
             Shorty shorty = new Shorty(program);
 
             List<UpdateStmt> lemmaCalls = shorty.FindRemovableLemmaCalls();
-            Assert.AreEqual(8, lemmaCalls.Count);
+            Assert.AreEqual(17, lemmaCalls.Count);
         }
 
         [Test]
@@ -103,7 +103,24 @@ namespace shorty
 
             List<Tuple<AssertStmt, AssertStmt>> simplifiedAsserts = shorty.GetSimplifiedAsserts();
             Assert.AreEqual(1, simplifiedAsserts.Count);
-            //TODO more asserts looking into the assertStmt
+            //TODO looking into the assertStmt to make sure it actually broke down
+        }
+
+        [Test]
+        public void ProgramIsNullException()
+        {
+            Initialise();
+            Program program = null;
+            int i = 1;
+            try {
+                Shorty shorty = new Shorty(program);
+            }
+            catch {
+                i++;
+            }
+            finally {
+                Assert.IsTrue(false);
+            }
         }
     }
 }

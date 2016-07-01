@@ -46,9 +46,9 @@ namespace shorty
     class LemmaCallWrap
     {
         public UpdateStmt LemmaCall { get; private set; }
-        public List<UpdateStmt> ParentList { get; private set; }
+        public List<Statement> ParentList { get; private set; }
 
-        public LemmaCallWrap(UpdateStmt lemmaCall, List<UpdateStmt> parentList)
+        public LemmaCallWrap(UpdateStmt lemmaCall, List<Statement> parentList)
         {
             LemmaCall = lemmaCall;
             ParentList = parentList;
@@ -110,11 +110,13 @@ namespace shorty
         //Lemma Calls
         //Need to keep track of methods and scope
         private readonly Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>> _allMethods = new Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>>();
-        private readonly Dictionary<Statement, List<UpdateStmt>> _lemmaCalls = new Dictionary<Statement, List<UpdateStmt>>(); //The type of lemma calls we want to remove are inside UpdateStatement
-
-        public Dictionary<Statement, List<UpdateStmt>> LemmaCalls {
-            get { return _lemmaCalls; }
-        }
+//        private readonly Dictionary<Statement, List<UpdateStmt>> _lemmaCalls = new Dictionary<Statement, List<UpdateStmt>>(); //The type of lemma calls we want to remove are inside UpdateStatement
+//
+//        public Dictionary<Statement, List<UpdateStmt>> LemmaCalls {
+//            get { return _lemmaCalls; }
+//        }
+        private readonly List<LemmaCallWrap> _lemmaCalls = new List<LemmaCallWrap>();
+        public List<LemmaCallWrap> LemmaCalls { get { return _lemmaCalls; } }
 
         #region Initialisation
 
@@ -317,13 +319,27 @@ namespace shorty
             }
         }
 
-        private void FindRemovableTypesInUpdateStmt(UpdateStmt updateStmt, Statement parent, ClassDecl classDecl)
+        private void FindRemovableTypesInUpdateStmt(UpdateStmt updateStmt, List<Statement> parent, ClassDecl classDecl)
         {
             foreach (var expr in updateStmt.Rhss) {
                 if (!IsAssignmentLemmaCall(expr, classDecl)) continue;
-                if (!_lemmaCalls.ContainsKey(parent))
-                    _lemmaCalls.Add(parent, new List<UpdateStmt>());
-                _lemmaCalls[parent].Add(updateStmt);
+                LemmaCalls.Add(new LemmaCallWrap(updateStmt, parent));
+            }
+        }
+
+        private void FindRemovableTypesInUpdateStmt(UpdateStmt updateStmt, Statement parent, ClassDecl classDecl)
+        {
+            if (parent is BlockStmt) {
+                var blockStmt = (BlockStmt)parent;
+                FindRemovableTypesInUpdateStmt(updateStmt, blockStmt.Body, classDecl);
+            }
+            else if (parent is MatchStmt) {
+                var matchStmt = (MatchStmt)parent;
+                foreach(var matchCase in matchStmt.Cases) {
+                    if (!matchCase.Body.Contains(updateStmt)) continue;
+                    FindRemovableTypesInUpdateStmt(updateStmt, matchCase.Body, classDecl);
+                    break;
+                }
             }
         }
 
@@ -354,30 +370,20 @@ namespace shorty
         public List<UpdateStmt> FindRemovableLemmaCalls()
         {
             List<UpdateStmt> removableLemmaCalls = new List<UpdateStmt>();
-            foreach (var stmt in _lemmaCalls.Keys) {
-                var blockStmt = stmt as BlockStmt;
-                if (blockStmt != null)
-                    FindRemovableLemmaCallsInBlock(blockStmt, removableLemmaCalls);
-                else if (stmt is MatchStmt) {}
-                //TODO: Somethign about match cases for lemma calls
+            foreach (var lemmaCallWrap in LemmaCalls) {
+                if(!TryRemoveLemmaCall(lemmaCallWrap.LemmaCall, lemmaCallWrap.ParentList)) continue;
+                removableLemmaCalls.Add(lemmaCallWrap.LemmaCall);
             }
             return removableLemmaCalls;
         }
 
-        private void FindRemovableLemmaCallsInBlock(BlockStmt blockStmt, List<UpdateStmt> removableLemmaCalls)
-        {
-            foreach (var lemmaCall in LemmaCalls[blockStmt])
-                TryRemoveLemmaCall(blockStmt.Body, lemmaCall, removableLemmaCalls);
-        }
-
-        private void TryRemoveLemmaCall(List<Statement> parentBody, UpdateStmt lemmaCall, List<UpdateStmt> removableLemmaCalls)
+        private bool TryRemoveLemmaCall(UpdateStmt lemmaCall, List<Statement> parentBody)
         {
             var index = parentBody.IndexOf(lemmaCall);
             parentBody.Remove(lemmaCall);
-            if (!IsProgramValid())
-                parentBody.Insert(index, lemmaCall);
-            else
-                removableLemmaCalls.Add(lemmaCall);
+            if (IsProgramValid()) return true;
+            parentBody.Insert(index, lemmaCall);
+            return false;
         }
 
         #endregion
@@ -402,18 +408,14 @@ namespace shorty
 
         private void IdentifyWildCardDecreases(LoopStmt loop, ref WildCardDecreases wildCardParent, Expression expr)
         {
-            var newWildCard = new WildCardDecreases(expr, loop.Decreases, wildCardParent);
-            if (wildCardParent != null)
-                wildCardParent.SubDecreases.Add(newWildCard);
-            else
-                DecreasesWildCards.Add(newWildCard); // There is no parent - add new one
+            var newWildCard = new WildCardDecreases(expr, loop.Decreases, wildCardParent);            
+            wildCardParent.SubDecreases.Add(newWildCard);
             wildCardParent = newWildCard;
         }
 
         private bool TryRemoveDecreases(Expression decreases, List<Expression> parent)
         {
             var position = parent.IndexOf(decreases);
-            if (decreases == null || decreases is WildcardExpr) return false;
             parent.Remove(decreases);
             if (IsProgramValid()) return true;
             parent.Insert(position, decreases);

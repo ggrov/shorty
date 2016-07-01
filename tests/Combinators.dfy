@@ -363,6 +363,7 @@ method VerificationTask2(t: Term) returns (r: Term)
   // following postcondition says that TerminatingReduction computes the same
   // term as this method does.
   ensures r == TerminatingReduction(t);
+  decreases *
 {
   r := t;
   ghost var trace := EmptyTrace;

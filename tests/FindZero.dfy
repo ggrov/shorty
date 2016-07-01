@@ -14,6 +14,7 @@ method FindZero(a: array<int>) returns (r: int)
     if (a[n] == 0) { r := n; return; }
     Lemma(a, n, a[n]);
     n := n + a[n];
+    assert 7 > 5;
   }
   r := -1;
 }
