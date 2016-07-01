@@ -128,7 +128,7 @@ namespace shorty
             Dictionary<Program, List<AssertStmt>> removeableAsserts = new Dictionary<Program, List<AssertStmt>>();
             Dictionary<Program, List<MaybeFreeExpression>> removeableInvariants = new Dictionary<Program, List<MaybeFreeExpression>>();
             Dictionary<Program, List<Expression>> removeableDecreases = new Dictionary<Program, List<Expression>>();
-            Dictionary<Program, List<UpdateStmt>> removableLemmaCalls = new Dictionary<Program, List<UpdateStmt>>();
+            Dictionary<Program, List<Statement>> removableLemmaCalls = new Dictionary<Program, List<Statement>>();
             List<Program> failedInitialValidationPrograms = new List<Program>();
             List<Program> failedAssertRemovalPrograms = new List<Program>();
 
@@ -174,7 +174,7 @@ namespace shorty
                 }
 
                 Console.WriteLine("Finding unnecessary lemma calls");
-                List<UpdateStmt> lemmaCalls = shorty.FindRemovableLemmaCalls();
+                List<Statement> lemmaCalls = shorty.FindRemovableLemmaCalls();
                 if (lemmaCalls == null) {
                     Console.WriteLine("Finding lemma calls failed");
                     continue;

@@ -87,7 +87,7 @@ namespace shorty
 
             Assert.AreEqual(21, shorty.LemmaCalls.Count);
             Assert.AreEqual(17, shorty.FindRemovableLemmaCalls().Count);
-            Assert.AreEqual(4, shorty.LemmaCalls.Count);
+            Assert.AreEqual(4, shorty.LemmaCalls.Count);//TODO make the counting work for the generic thingmy
         }
 
         [Test]
