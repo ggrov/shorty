@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
@@ -125,7 +125,7 @@ namespace shorty
             }
 
             //setup shorty and test the files
-            Dictionary<Program, List<AssertStmt>> removeableAsserts = new Dictionary<Program, List<AssertStmt>>();
+            Dictionary<Program, List<Statement>> removeableAsserts = new Dictionary<Program, List<Statement>>();
             Dictionary<Program, List<MaybeFreeExpression>> removeableInvariants = new Dictionary<Program, List<MaybeFreeExpression>>();
             Dictionary<Program, List<Expression>> removeableDecreases = new Dictionary<Program, List<Expression>>();
             Dictionary<Program, List<Statement>> removableLemmaCalls = new Dictionary<Program, List<Statement>>();
@@ -150,7 +150,7 @@ namespace shorty
                 }
 
                 Console.WriteLine("Finding unnecesary asserts");
-                List<AssertStmt> asserts = shorty.FindRemovableAsserts();
+                List<Statement> asserts = shorty.FindRemovableAsserts();
                 shorty.GetSimplifiedAsserts();
                 if (asserts == null) {
                     Console.WriteLine("Finding unnecessary asserts failed");

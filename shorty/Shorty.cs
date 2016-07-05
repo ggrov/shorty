@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.Contracts;
@@ -146,13 +146,18 @@ namespace shorty
         }
 
         #endregion
-
-        public void RemoveRange(List<Statement> removableLemmaCalls)
-        {
-            foreach (var statement in removableLemmaCalls) {
-                //RemoveLemmaCall();
-            }
-        }
+//
+//        public void RemoveRange<T>(List<Wrap<T>> removableItems)
+//        {
+//            foreach (var statement in removableItems) 
+//                RemoveItem(statement);
+//        }
+//
+//        public void RemoveItem<T>(Wrap<T> removableItem)
+//        {
+//            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) 
+//                if(removableTypesInMethod.RemoveItem(removableItem)) return;
+//        }
     }
 
     class RemovableTypesInMember
@@ -179,6 +184,15 @@ namespace shorty
         {
             Removable = removable;
             ParentList = parentList;
+        }
+
+        public static List<T> GetRemovables(List<Wrap<T>> wrapList)
+        {
+            List<T> removables = new List<T>(); 
+            foreach (var wrap in wrapList) {
+                removables.Add(wrap.Removable);
+            }
+            return removables;
         }
     }
 
@@ -244,53 +258,27 @@ namespace shorty
 
         public List<Statement> FindRemovableLemmaCalls()
         {
-            List<Statement> removableLemmaCalls = Remover.Remove(_allRemovableTypes.LemmaCalls, Program);
-            _allRemovableTypes.RemoveRange(removableLemmaCalls);
-            return removableLemmaCalls;
-        }
-
-        private bool TryRemoveLemmaCall(Wrap<Statement> lemmaCallWrap)
-        {
-            var parentBody = lemmaCallWrap.ParentList;
-            var lemmaCall = lemmaCallWrap.Removable;
-            var index = parentBody.IndexOf(lemmaCall);
-            parentBody.Remove(lemmaCall);
-            if (IsProgramValid()) {
-                _allRemovableTypes.RemoveLemmaCall(lemmaCallWrap);
-                return true;
+            List<Wrap<Statement>> removableLemmaCalls = Remover.Remove(_allRemovableTypes.LemmaCalls, Program);
+            foreach (var removableLemmaCall in removableLemmaCalls) {
+                _allRemovableTypes.RemoveLemmaCall(removableLemmaCall);
             }
-            parentBody.Insert(index, lemmaCall);
-            return false;
+            return Wrap<Statement>.GetRemovables(removableLemmaCalls);
         }
 
         #endregion
 
         #region decreases
 
-        private bool TryRemoveDecreases(Wrap<Expression> decreasesWrap)
-        {
-            var parent = decreasesWrap.ParentList;
-            var decreases = decreasesWrap.Removable;
-            var position = parent.IndexOf(decreases);
-            parent.Remove(decreases);
-            if (IsProgramValid()) {
-                _allRemovableTypes.RemoveDecreases(decreasesWrap);
-                return true;
-            }
-            parent.Insert(position, decreases);
-            return false;
-        }
-
         public List<Expression> FindRemovableDecreases()
         {
-            List<Expression> removableDecreases = new List<Expression>();
-            foreach (Wrap<Expression> decreasesWrap in _allRemovableTypes.Decreases) {
-                if (!TryRemoveDecreases(decreasesWrap)) continue;
-                removableDecreases.Add(decreasesWrap.Removable);
+            List<Wrap<Expression>> removableDecreases = Remover.Remove(_allRemovableTypes.Decreases, Program);
+            foreach (var removableDecrease in removableDecreases) {
+                _allRemovableTypes.RemoveDecreases(removableDecrease);
             }
             //We also have to find removable wildcards which are stored differently
-            removableDecreases.AddRange(FindRemovableWildCards());
-            return removableDecreases;
+            var expressions = Wrap<Expression>.GetRemovables(removableDecreases);
+            expressions.AddRange(FindRemovableWildCards());
+            return expressions;
         }
 
         private List<Expression> FindRemovableWildCards()
@@ -344,27 +332,11 @@ namespace shorty
 
         public List<MaybeFreeExpression> FindRemovableInvariants()
         {
-            List<MaybeFreeExpression> removableInvariants = new List<MaybeFreeExpression>();
-            for (int i = _allRemovableTypes.Invariants.Count - 1; i >= 0; i--) {
-                var invariantWrap = _allRemovableTypes.Invariants[i];
-                if (!TryToRemoveInvariant(invariantWrap)) continue;
-                removableInvariants.Add(invariantWrap.Removable);
+            List<Wrap<MaybeFreeExpression>> removableInvariants = Remover.Remove(_allRemovableTypes.Invariants, Program);
+            foreach (var removableInvariant in removableInvariants) {
+                _allRemovableTypes.RemoveInvariant(removableInvariant);
             }
-            return removableInvariants;
-        }
-
-        private bool TryToRemoveInvariant(Wrap<MaybeFreeExpression> invariantWrap)
-        {
-            var parent = invariantWrap.ParentList;
-            var invariant = invariantWrap.Removable;
-            var position = parent.IndexOf(invariant);
-            parent.Remove(invariant);
-            if (IsProgramValid()) {
-                _allRemovableTypes.RemoveInvariant(invariantWrap);
-                return true;
-            }
-            parent.Insert(position, invariant);
-            return false;
+            return Wrap<MaybeFreeExpression>.GetRemovables(removableInvariants);
         }
 
         #endregion
@@ -493,14 +465,13 @@ namespace shorty
             return brokenAsserts;
         }
 
-        public List<AssertStmt> FindRemovableAsserts()
+        public List<Statement> FindRemovableAsserts()
         {
-            List<AssertStmt> removedAsserts = new List<AssertStmt>();
-            foreach (var assertWrap in _allRemovableTypes.Asserts) {
-                if (!TryRemoveAssert(assertWrap)) continue;
-                removedAsserts.Add((AssertStmt)assertWrap.Removable);
+            List<Wrap<Statement>> removedAsserts = Remover.Remove(_allRemovableTypes.Asserts, Program);
+            foreach (var removedAssert in removedAsserts) {
+                _allRemovableTypes.RemoveAssert(removedAssert);
             }
-            return removedAsserts;
+            return Wrap<Statement>.GetRemovables(removedAsserts);
         }
 
         private bool TryRemoveAssert(Wrap<Statement> assertWrap)
@@ -570,8 +541,8 @@ namespace shorty
                 Console.WriteLine(!allOk ? "Verification failed" : "Verification Successful");
                 return oc == Bpl.PipelineOutcome.VerificationCompleted && allOk;
             }
-            catch {
-                Console.WriteLine("Verification failed");
+            catch (Exception e){
+                Console.WriteLine("Verification failed: "+e.Message);
                 return false;
             }
         }
@@ -579,13 +550,13 @@ namespace shorty
 
     class Remover
     {
-        public static List<T> Remove<T>(ReadOnlyCollection<Wrap<T>> wraps, Program program)
+        public static List<Wrap<T>> Remove<T>(ReadOnlyCollection<Wrap<T>> wraps, Program program)
         {
-            List<T> removableLemmaCalls = new List<T>();
+            List<Wrap<T>> removableLemmaCalls = new List<Wrap<T>>();
             foreach (var wrap in wraps)
             {
                 if (!TryRemove(wrap, program)) continue;
-                removableLemmaCalls.Add(wrap.Removable);
+                removableLemmaCalls.Add(wrap);
             }
             return removableLemmaCalls;
         }
