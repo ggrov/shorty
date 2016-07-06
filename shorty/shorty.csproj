@@ -109,6 +109,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="RemovableTypeFinder.cs" />
     <Compile Include="Tests.cs">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Compile>
