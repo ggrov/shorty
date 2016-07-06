@@ -97,7 +97,7 @@ namespace shorty
             Program program = GetProgram("CombinedAsserts.dfy");
             Shorty shorty = new Shorty(program);
 
-            List<Tuple<AssertStmt, AssertStmt>> simplifiedAsserts = shorty.GetSimplifiedAsserts();
+            List<Tuple<Statement, Statement>> simplifiedAsserts = shorty.GetSimplifiedAsserts();
             Assert.AreEqual(1, simplifiedAsserts.Count);
             //TODO looking into the assertStmt to make sure it actually broke down
         }

@@ -8,6 +8,7 @@ namespace shorty
     {
         private Program Program { get; set; }
         readonly AllRemovableTypes _allRemovableTypes = new AllRemovableTypes();
+        //needed to identify scope of methods for lemma calls
         private readonly Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>> _allMethods = new Dictionary<ModuleDefinition, Dictionary<ClassDecl, List<Method>>>();
 
 
@@ -165,7 +166,6 @@ namespace shorty
 
         private void IdentifyRemovableDecreasesTypesInLoop(LoopStmt loop, Method method, ref WildCardDecreases wildCardParent)
         {
-            //Deal with wildcard decreases
             foreach (var expr in loop.Decreases.Expressions) {
                 IdentifyDecreasesExpression(loop, method, ref wildCardParent, expr);
             }

@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
+using Type = System.Type;
 
 namespace shorty
 {
@@ -157,127 +158,20 @@ namespace shorty
 
         #region Asserts
 
-        public Dictionary<Method, List<List<AssertStmt>>> TestDifferentRemovals()
-        {
-            var returnData = new Dictionary<Method, List<List<AssertStmt>>>();
-            foreach (var memberDecl in _allRemovableTypes.RemovableTypesInMethods.Keys) {
-                var method = (Method) memberDecl;
-                if(method == null) continue;
-                var solutions = new List<List<AssertStmt>>();
-                TestAssertRemovalOrdering(0, solutions, new List<AssertStmt>(), method);
-                returnData.Add(method, solutions);
-            }
-            return returnData;
-        }
-
-        private void TestAssertRemovalOrdering(int index, List<List<AssertStmt>> solutions, List<AssertStmt> currentSolution, Method method)
-        {
-            if (index == _allRemovableTypes.RemovableTypesInMethods[method].Asserts.Count) {
-                solutions.Add(new List<AssertStmt>(currentSolution));
-                return;
-            }
-            var assert = (AssertStmt) _allRemovableTypes.Asserts[index].Removable;
-            var parent = _allRemovableTypes.Asserts[index].ParentList;
-            TryRemovingAssertForOrderingTest(assert, parent, method, index, currentSolution, solutions);
-        }
-
-        private void TryRemovingAssertForOrderingTest(AssertStmt assert, List<Statement> parent, Method method, int index, List<AssertStmt> currentSolution, List<List<AssertStmt>> solutions)
-        {
-            var assertPos = parent.IndexOf(assert);
-            parent.Remove(assert);
-            if (IsProgramValid()) {
-                var newCurrentSolution = new List<AssertStmt>(currentSolution) {assert}; //create a copy of the currentSolution and add in the assert
-                TestAssertRemovalOrdering(index + 1, solutions, newCurrentSolution, method);
-                parent.Insert(assertPos, assert);
-                TestAssertRemovalOrdering(index + 1, solutions, currentSolution, method);
-            }
-            else {
-                parent.Insert(assertPos, assert);
-                TestAssertRemovalOrdering(index + 1, solutions, currentSolution, method);
-            }
-        }
-
         /// <summary>
         /// Removes unnecessary parts of asserts (e.g. combined by && where one part is not needed)
         /// </summary>
         /// <returns></returns>
-        public List<Tuple<AssertStmt, AssertStmt>> GetSimplifiedAsserts()
+        public List<Tuple<Statement, Statement>> GetSimplifiedAsserts()
         {
-            var simplifiedAsserts = new List<Tuple<AssertStmt, AssertStmt>>();
-            foreach (var assertWrap in _allRemovableTypes.Asserts)
-                TrySimplifyAssert(assertWrap, simplifiedAsserts);
-            return simplifiedAsserts;
+            Simplifier simplifier = new Simplifier(Program);
+            return simplifier.GetSimplifiedItems(_allRemovableTypes.Asserts);
         }
 
-        private void TrySimplifyAssert(Wrap<Statement> assertWrap, List<Tuple<AssertStmt, AssertStmt>> simplifiedAsserts)
+        public Dictionary<Method, List<List<Statement>>> TestDifferentAssertRemovals()
         {
-            var assert = (AssertStmt) assertWrap.Removable;
-            var parent = assertWrap.ParentList;
-            var binExpr = assert.Expr as BinaryExpr;
-            if (binExpr != null)
-                if (binExpr.Op != BinaryExpr.Opcode.And) return;
-
-            var index = parent.IndexOf(assert);
-            parent.Remove(assert);
-            if (!IsProgramValid()) {
-                SimplifyAssert(assertWrap, index, simplifiedAsserts);
-            }
-            else 
-                Console.WriteLine("Whole assert can be completely removed separately");
-        }
-
-        private void SimplifyAssert(Wrap<Statement> assertWrap, int index, List<Tuple<AssertStmt, AssertStmt>> simplifiedAsserts)
-        {
-            var brokenAsserts = BreakAndReinsertAssert((AssertStmt) assertWrap.Removable, assertWrap.ParentList, index);
-            brokenAsserts.Reverse();
-            //Test to see which can be removed
-            for (var assertNum = brokenAsserts.Count - 1; assertNum >= 0; assertNum--) {
-                var brokenAssert = brokenAsserts[assertNum];
-                if (!TryRemoveAssert(assertWrap)) continue;
-                brokenAsserts.Remove(brokenAssert);
-            }
-            simplifiedAsserts.Add(new Tuple<AssertStmt, AssertStmt>((AssertStmt) assertWrap.Removable, CombineAsserts(brokenAsserts)));
-        }
-
-        private List<AssertStmt> BreakAndReinsertAssert(AssertStmt assert, List<Statement> parent, int index)
-        {
-            var brokenAsserts = BreakDownExpr(assert);
-            foreach (var brokenAssert in brokenAsserts) {
-                parent.Insert(index, brokenAssert);
-            }
-            return brokenAsserts;
-        }
-
-        private AssertStmt CombineAsserts(List<AssertStmt> brokenAsserts)
-        {
-            if (brokenAsserts.Count < 1) {
-                return null;
-            }
-            if (brokenAsserts.Count == 1)
-                return brokenAsserts[0];
-
-            var assert = brokenAsserts[0];
-            brokenAsserts.Remove(assert);
-            var left = brokenAsserts[0].Expr;
-            var right = CombineAsserts(brokenAsserts).Expr;
-            var binExpr = new BinaryExpr(left.tok, BinaryExpr.Opcode.And, left, right);
-            var newAssert = new AssertStmt(assert.Tok, assert.EndTok, binExpr, assert.Attributes);
-            return newAssert;
-        }
-
-        private List<AssertStmt> BreakDownExpr(AssertStmt assert)
-        {
-            var brokenAsserts = new List<AssertStmt>();
-            var binaryExpr = assert.Expr as BinaryExpr;
-            if (binaryExpr == null || binaryExpr.Op != BinaryExpr.Opcode.And) {
-                brokenAsserts.Add(assert);
-                return brokenAsserts;
-            }
-            var newAssert = new AssertStmt(binaryExpr.tok, assert.EndTok, binaryExpr.E0, assert.Attributes);
-            var newAssert2 = new AssertStmt(binaryExpr.tok, assert.EndTok, binaryExpr.E1, assert.Attributes);
-            brokenAsserts.AddRange(BreakDownExpr(newAssert));
-            brokenAsserts.AddRange(BreakDownExpr(newAssert2));
-            return brokenAsserts;
+            RemovalOrderTester<Statement> removalOrderTester = new RemovalOrderTester<Statement>(_allRemovableTypes.GetAssertDictionary(), Program);
+            return removalOrderTester.TestDifferentRemovals();
         }
 
         public List<Statement> FindRemovableAsserts()
@@ -289,34 +183,20 @@ namespace shorty
             return Wrap<Statement>.GetRemovables(removedAsserts);
         }
 
-        private bool TryRemoveAssert(Wrap<Statement> assertWrap)
-        {
-            var parent = assertWrap.ParentList;
-            var assert = assertWrap.Removable;
-            var position = parent.IndexOf(assert);
-            parent.Remove(assert);
-            if (IsProgramValid()) {
-                _allRemovableTypes.RemoveAssert(assertWrap);
-                return true;
-            }
-            parent.Insert(position, assert);
-            return false;
-        }
-
         #endregion
 
         #region validation
 
         public bool IsProgramValid()
         {
-            var validator = new SimpleValidator();
+            var validator = new SimpleVerifier();
             return validator.IsProgramValid(Program);
         }
 
         #endregion
     }
 
-    internal class SimpleValidator
+    internal class SimpleVerifier
     {
         public void BoogieErrorInformation(Bpl.ErrorInformation errorInfo) {}
 
@@ -328,6 +208,11 @@ namespace shorty
         }
 
         public bool IsProgramValid(Program program)
+        {
+            return IsProgramValid(program, null);
+        }
+
+        public bool IsProgramValid(Program program, Bpl.ErrorReporterDelegate errorDelegate)
         {
             try {
                 var programId = "main_program_id";
@@ -348,9 +233,8 @@ namespace shorty
                 Bpl.ExecutionEngine.CollectModSets(boogieProgram);
                 Bpl.ExecutionEngine.CoalesceBlocks(boogieProgram);
                 Bpl.ExecutionEngine.Inline(boogieProgram);
-                Bpl.ErrorReporterDelegate er = BoogieErrorInformation;
 
-                oc = Bpl.ExecutionEngine.InferAndVerify(boogieProgram, stats, programId, er);
+                oc = Bpl.ExecutionEngine.InferAndVerify(boogieProgram, stats, programId, errorDelegate);
 
                 var allOk = stats.ErrorCount == 0 && stats.InconclusiveCount == 0 && stats.TimeoutCount == 0 && stats.OutOfMemoryCount == 0;
                 Console.WriteLine(allOk ? "Verification Successful" : "Verification failed");
@@ -600,6 +484,7 @@ namespace shorty
     internal interface IRemover
     {
         List<Wrap<T>> Remove<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary);
+        bool TryRemove<T>(Wrap<T> wrap);
     }
 
     internal class OneAtATimeRemover : IRemover
@@ -630,7 +515,7 @@ namespace shorty
             return removableWraps;
         }
 
-        private bool TryRemove<T>(Wrap<T> wrap)
+        public bool TryRemove<T>(Wrap<T> wrap)
         {
             var parentBody = wrap.ParentList;
             var removable = wrap.Removable;
@@ -645,8 +530,262 @@ namespace shorty
 
         private static bool IsProgramValid(Program program)
         {
-            var validator = new SimpleValidator();
+            var validator = new SimpleVerifier();
             return validator.IsProgramValid(program);
         }
+    }
+
+    internal class SimiltaneousMethodRemover : IRemover
+    {
+        private readonly Program _program;
+        private bool finished = false;
+        private SimpleVerifier simpleVerifier = new SimpleVerifier();
+        private int index = 0;
+
+        internal class SimilRemoverStorage<T>
+        {
+            private Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary;
+
+            public void ErrorInformation(Bpl.ErrorInformation errorInfo)
+            {
+
+            }
+        }
+
+        public SimiltaneousMethodRemover(Program program)
+        {
+            _program = program;
+        }
+
+        public List<Wrap<T>> Remove<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary)
+        {
+            while (!finished) {
+                
+            }
+            Type type = typeof(SimiltaneousMethodRemover);
+
+            IRemover remover = (IRemover)Activator.CreateInstance(type);
+//            remover.Remove(something);
+            var removableWraps = new List<Wrap<T>>();
+//            foreach (var removableWrapObj ) {
+//                if(removableWrapObj is Wrap<T>)
+//                    removableWraps.Add((Wrap<T>)removableWrapObj));
+//            }
+            return removableWraps;
+        }
+
+//        private List<Wrap<T>> RemoveItemInEachMethod
+
+        public bool TryRemove<T>(Wrap<T> wrap)
+        {
+            SimilRemoverStorage<T> similRemover = new SimilRemoverStorage<T>();
+
+            var parentBody = wrap.ParentList;
+            var removable = wrap.Removable;
+            var index = parentBody.IndexOf(removable);
+            parentBody.Remove(removable);
+            if (simpleVerifier.IsProgramValid(_program, similRemover.ErrorInformation))
+            {
+                return true;
+            }
+            parentBody.Insert(index, removable);
+            return false;
+        }
+
+
+    }
+
+    internal class RemovalOrderTester<T>
+    {
+        private readonly Dictionary<MemberDecl, List<Wrap<T>>> _memberWrapDictionary;
+        private readonly Program _program;
+
+        public RemovalOrderTester(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary, Program program)
+        {
+            _memberWrapDictionary = memberWrapDictionary;
+            _program = program;
+        }
+
+        public Dictionary<Method, List<List<T>>> TestDifferentRemovals()
+        {
+            var returnData = new Dictionary<Method, List<List<T>>>();
+            foreach (var memberDecl in _memberWrapDictionary.Keys) {
+                var method = (Method) memberDecl;
+                if (method == null) continue;
+                var solutions = new List<List<T>>();
+                TestRemovalOrdering(0, solutions, new List<T>(), method);
+                returnData.Add(method, solutions);
+            }
+            return returnData;
+        }
+
+        private void TestRemovalOrdering(int index, List<List<T>> solutions, List<T> currentSolution, Method method)
+        {
+            if (index == _memberWrapDictionary[method].Count) {
+                solutions.Add(new List<T>(currentSolution));
+                return;
+            }
+            var item = _memberWrapDictionary[method][index].Removable;
+            var parent = _memberWrapDictionary[method][index].ParentList;
+            TryRemovingItemForOrderingTest(item, parent, method, index, currentSolution, solutions);
+        }
+
+        private void TryRemovingItemForOrderingTest(T item, List<T> parent, Method method, int index, List<T> currentSolution, List<List<T>> solutions)
+        {
+            var assertPos = parent.IndexOf(item);
+            parent.Remove(item);
+            var validator = new SimpleVerifier();
+            if (validator.IsProgramValid(_program)) {
+                var newCurrentSolution = new List<T>(currentSolution) {item}; //create a copy of the currentSolution and add in the item
+                TestRemovalOrdering(index + 1, solutions, newCurrentSolution, method);
+                parent.Insert(assertPos, item);
+                TestRemovalOrdering(index + 1, solutions, currentSolution, method);
+            }
+            else {
+                parent.Insert(assertPos, item);
+                TestRemovalOrdering(index + 1, solutions, currentSolution, method);
+            }
+        }
+    }
+
+    internal class Simplifier
+    {
+        private IRemover _remover;
+        private SimpleVerifier _verifier = new SimpleVerifier();
+        private Program _program;
+
+        public Simplifier(Program program)
+        {
+            _program = program;
+            _remover = new OneAtATimeRemover(program);
+        }
+
+        public List<Tuple<T, T>> GetSimplifiedItems<T>(IEnumerable<Wrap<T>> itemWraps)
+        {
+            var simplifiedItems = new List<Tuple<T, T>>();
+            foreach (var wrap in itemWraps)
+                simplifiedItems.Add(TrySimplifyItem(wrap));
+            return simplifiedItems;
+        }
+
+        public Tuple<T, T> TrySimplifyItem<T>(Wrap<T> wrap)
+        {
+            var item = wrap.Removable;
+            var parent = wrap.ParentList;
+            var binExpr = GetExpr(wrap.Removable) as BinaryExpr;
+            if (binExpr != null)
+                if (binExpr.Op != BinaryExpr.Opcode.And) return null;
+
+            var index = parent.IndexOf(item);
+            parent.Remove(item);
+            if (!_verifier.IsProgramValid(_program))
+            {
+                return SimplifyItem(wrap, index);
+            }
+            Console.WriteLine("Whole assert can be completely removed separately"); //TODO figure out what to do here (remove from _removableItems?)
+            return null;
+        }
+
+        private Expression GetExpr<T>(T removable)
+        {
+            var assert = removable as AssertStmt;
+            if (assert != null)
+            {
+                return assert.Expr;
+            }
+            var invariant = removable as MaybeFreeExpression;
+            if (invariant != null)
+            {
+                return invariant.E;
+            }
+            return null;
+        }
+
+        private T GetNewNodeFromItem<T>(T brokenItem, BinaryExpr binExpr)
+        {
+            var assert = brokenItem as AssertStmt;
+            if (assert != null)
+            {
+                return (T)(object)new AssertStmt(assert.Tok, assert.EndTok, binExpr, assert.Attributes);
+            }
+            var invariant = brokenItem as MaybeFreeExpression;
+            if (invariant != null)
+            {
+                return (T)(object)new MaybeFreeExpression(binExpr);
+            }
+            return default(T);
+        }
+
+        private T GetNewNodeFromExpr<T>(T brokenItem, BinaryExpr binExpr, Expression subExpr)
+        {
+            var assert = brokenItem as AssertStmt;
+            if (assert != null)
+            {
+                return (T)(object)new AssertStmt(binExpr.tok, assert.EndTok, subExpr, assert.Attributes);
+            }
+            var invariant = brokenItem as MaybeFreeExpression;
+            if (invariant != null)
+            {
+                return (T)(object)new MaybeFreeExpression(binExpr);
+            }
+            return default(T);
+        }
+
+        private Tuple<T, T> SimplifyItem<T>(Wrap<T> wrap, int index)
+        {
+            var brokenItems = BreakAndReinsertItem(wrap, index);
+            brokenItems.Reverse();
+            //Test to see which can be removed
+            for (var assertNum = brokenItems.Count - 1; assertNum >= 0; assertNum--)
+            {
+                var brokenItem = brokenItems[assertNum];
+                if (!_remover.TryRemove(wrap)) continue;
+                brokenItems.Remove(brokenItem);
+            }
+            return new Tuple<T, T>(wrap.Removable, CombineItems(brokenItems));
+        }
+
+        private List<T> BreakAndReinsertItem<T>(Wrap<T> wrap, int index)
+        {
+            var brokenAsserts = BreakDownExpr(wrap.Removable);
+            foreach (var brokenAssert in brokenAsserts)
+            {
+                wrap.ParentList.Insert(index, brokenAssert);
+            }
+            return brokenAsserts;
+        }
+
+        private T CombineItems<T>(List<T> brokenItems)
+        {
+            if (brokenItems.Count < 1)
+                return default(T); //null
+            if (brokenItems.Count == 1)
+                return brokenItems[0];
+
+            var item = brokenItems[0];
+            brokenItems.Remove(item);
+            var left = GetExpr(brokenItems[0]);
+            var right = GetExpr(CombineItems(brokenItems));
+            var binExpr = new BinaryExpr(left.tok, BinaryExpr.Opcode.And, left, right);
+            var newNode = GetNewNodeFromItem(brokenItems[0], binExpr);
+            return newNode;
+        }
+
+        private List<T> BreakDownExpr<T>(T item)
+        {
+            var brokenItems = new List<T>();
+            var binaryExpr = GetExpr(item) as BinaryExpr;
+            if (binaryExpr == null || binaryExpr.Op != BinaryExpr.Opcode.And)
+            {
+                brokenItems.Add(item);
+                return brokenItems;
+            }
+            var newItem1 = GetNewNodeFromExpr(item, binaryExpr, binaryExpr.E0);
+            var newItem2 = GetNewNodeFromExpr(item, binaryExpr, binaryExpr.E1);
+            brokenItems.AddRange(BreakDownExpr(newItem1));
+            brokenItems.AddRange(BreakDownExpr(newItem2));
+            return brokenItems;
+        }
+
     }
 }

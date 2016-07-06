@@ -16,7 +16,6 @@ namespace shorty
     class ShortyMain
     {
         static Bpl.OutputPrinter printer;
-        //private Printer printer;
 
         public static void RunLogger(List<Program> programs)
         {
@@ -31,20 +30,30 @@ namespace shorty
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
 //            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\results.txt")) {
+                bool betterSolutionFound = false;
                 foreach (var program in programs) {
                     Shorty shorty = new Shorty(program);
-                    Dictionary<Method,List<List<AssertStmt>>> solutions = shorty.TestDifferentRemovals();
+                    Dictionary<Method,List<List<Statement>>> solutions = shorty.TestDifferentAssertRemovals();
 
                     foreach (Method method in solutions.Keys) {
                         int i = 0;
+                        int firstValue = solutions[method][i].Count;
                         writer.WriteLine("Method: "+method.Name);
                         foreach (var asserts in solutions[method]) {
-                            writer.WriteLine("Solution " + ++i + " | length " + asserts.Count);
+                            writer.Write("Solution " + ++i + " | length " + asserts.Count);
+                            if (asserts.Count >= firstValue && i > 1) {
+                                writer.WriteLine(" | BETTER OR SAME AS FIRST!!!!!!!!!");
+                                betterSolutionFound = true;
+                            }
+                            else {
+                                writer.WriteLine();
+                            }
                         }
                     }
 
 
                 }
+                writer.WriteLine(betterSolutionFound ? "A better solution was found!" : "No better solution was found");
             }
         }
 
@@ -103,25 +112,27 @@ namespace shorty
                 dafnyPrograms.Add(new Microsoft.Dafny.Program(programName, module, builtIns, new ConsoleErrorReporter()));
             }
 
-            Console.WriteLine("1: standard run\n2: run logger\n3: run order testing\n4: run unit tests");
+            Console.WriteLine("1: standard run\n2: run logger\n3: run order testing\n");
             string input = Console.ReadLine();
             int ans;
             if (!Int32.TryParse(input, out ans)) {
                 return;
             }
-            else if (ans < 1 || ans > 3) {
+            if (ans < 1 || ans > 3) {
                 return;
             }
 
-            if (ans == 2) {
-                RunLogger(dafnyPrograms);
-                return;
-            }
-            if (ans == 3) {
-                RunTest(dafnyPrograms);
-                Console.WriteLine("Tests complete");
-                Console.ReadLine();
-                return;
+            switch (ans) {
+                case 2:
+                    RunLogger(dafnyPrograms);
+                    Console.WriteLine("\n\nLogging Complete");
+                    Console.ReadLine();
+                    return;
+                case 3:
+                    RunTest(dafnyPrograms);
+                    Console.WriteLine("\n\nTests Complete");
+                    Console.ReadLine();
+                    return;
             }
 
             //setup shorty and test the files
