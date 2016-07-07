@@ -4,6 +4,8 @@ using System.Collections.ObjectModel;
 using System.Diagnostics.Contracts;
 using System.IO;
 using System.Linq;
+using System.Net;
+using System.Runtime.CompilerServices;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 using Type = System.Type;
@@ -45,6 +47,12 @@ namespace shorty
             _allRemovableTypes = removalTypeFinder.FindRemovables();
             Remover = remover;
         }
+
+        private void Testere(object sender, ContractFailedEventArgs e)
+        {
+            throw new NotImplementedException();
+        }
+
 
         public Shorty(Program program)
         {
@@ -185,6 +193,28 @@ namespace shorty
 
         #endregion
 
+        #region Calc Statements
+
+        public List<BlockStmt> FindRemovableCalcHints()
+        {
+            var removedCalcs = Remover.Remove(_allRemovableTypes.GetCalcHintDictionary());
+            foreach (var removedCalc in removedCalcs) {
+                _allRemovableTypes.RemoveCalcHint(removedCalc);
+            }
+            return Wrap<BlockStmt>.GetRemovables(removedCalcs);
+        }
+
+        public List<Expression> FindRemovableCalcLines()
+        {
+            var removedCalcs = Remover.Remove(_allRemovableTypes.GetCalcLineDictionary());
+            foreach (var removedCalc in removedCalcs) {
+                _allRemovableTypes.RemoveCalcLine(removedCalc);
+            }
+            return Wrap<Expression>.GetRemovables(removedCalcs);
+        }
+
+        #endregion
+
         #region validation
 
         public bool IsProgramValid()
@@ -296,6 +326,24 @@ namespace shorty
             }
         }
 
+        public ReadOnlyCollection<Wrap<Expression>> CalcLines {
+            get {
+                var calcLines = new List<Wrap<Expression>>();
+                foreach (var removableTypes in RemovableTypesInMethods.Values)
+                    calcLines.AddRange(removableTypes.CalcLines);
+                return calcLines.AsReadOnly();
+            }
+        }
+
+        public ReadOnlyCollection<Wrap<BlockStmt>> CalcHints {
+            get {
+                var calcHints = new List<Wrap<BlockStmt>>();
+                foreach (var removableTypes in RemovableTypesInMethods.Values)
+                    calcHints.AddRange(removableTypes.CalcHints);
+                return calcHints.AsReadOnly();
+            }
+        }
+
         public void AddMember(MemberDecl member)
         {
             if (!RemovableTypesInMethods.ContainsKey(member))
@@ -332,6 +380,18 @@ namespace shorty
         {
             AddMember(member);
             RemovableTypesInMethods[member].LemmaCalls.Add(lemmaCall);
+        }
+
+        public void AddCalcLine(Wrap<Expression> calcLine, MemberDecl member)
+        {
+            AddMember(member);
+            RemovableTypesInMethods[member].CalcLines.Add(calcLine);
+        }
+
+        public void AddCalcHint(Wrap<BlockStmt> calcLine, MemberDecl member)
+        {
+            AddMember(member);
+            RemovableTypesInMethods[member].CalcHints.Add(calcLine);
         }
 
         #endregion
@@ -383,6 +443,26 @@ namespace shorty
             }
         }
 
+        public void RemoveCalcLine(Wrap<Expression> calcLine)
+        {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods)
+            {
+                if (!removableTypesInMethods.Value.CalcLines.Contains(calcLine)) continue;
+                removableTypesInMethods.Value.CalcLines.Remove(calcLine);
+                return;
+            }
+        }
+
+        public void RemoveCalcHint(Wrap<BlockStmt> calcHint)
+        {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods)
+            {
+                if (!removableTypesInMethods.Value.CalcHints.Contains(calcHint)) continue;
+                removableTypesInMethods.Value.CalcHints.Remove(calcHint);
+                return;
+            }
+        }
+
         #endregion
 
         #region Get dictionaries
@@ -423,6 +503,24 @@ namespace shorty
             return dictionary;
         }
 
+        public Dictionary<MemberDecl, List<Wrap<BlockStmt>>> GetCalcHintDictionary()
+        {
+            var dictionary = new Dictionary<MemberDecl, List<Wrap<BlockStmt>>>();
+            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
+                dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.CalcHints);
+            }
+            return dictionary;
+        }
+
+        public Dictionary<MemberDecl, List<Wrap<Expression>>> GetCalcLineDictionary()
+        {
+            var dictionary = new Dictionary<MemberDecl, List<Wrap<Expression>>>();
+            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
+                dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.CalcLines);
+            }
+            return dictionary;
+        }
+
         #endregion
     }
 
@@ -434,6 +532,8 @@ namespace shorty
         public readonly List<Wrap<Expression>> Decreases = new List<Wrap<Expression>>();
         public readonly List<WildCardDecreases> WildCardDecreaseses = new List<WildCardDecreases>();
         public readonly List<Wrap<Statement>> LemmaCalls = new List<Wrap<Statement>>();
+        public readonly List<Wrap<BlockStmt>> CalcHints = new List<Wrap<BlockStmt>>();
+        public readonly List<Wrap<Expression>> CalcLines = new List<Wrap<Expression>>();
 
         public RemovableTypesInMember(MemberDecl member)
         {
@@ -484,7 +584,7 @@ namespace shorty
     internal interface IRemover
     {
         List<Wrap<T>> Remove<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary);
-        bool TryRemove<T>(Wrap<T> wrap);
+        //bool TryRemove<T>(Wrap<T> wrap);
     }
 
     internal class OneAtATimeRemover : IRemover
@@ -537,18 +637,29 @@ namespace shorty
 
     internal class SimiltaneousMethodRemover : IRemover
     {
+        // Goes though each method, removes one thing then verifies and reinserts from the error messages
         private readonly Program _program;
-        private bool finished = false;
-        private SimpleVerifier simpleVerifier = new SimpleVerifier();
-        private int index = 0;
+        private readonly SimpleVerifier _simpleVerifier = new SimpleVerifier();
 
         internal class SimilRemoverStorage<T>
         {
-            private Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary;
+            public Dictionary<MemberDecl, Tuple<Wrap<T>, int>> LastRemovedItem = new Dictionary<MemberDecl, Tuple<Wrap<T>, int>>();
 
             public void ErrorInformation(Bpl.ErrorInformation errorInfo)
             {
+                MemberDecl member = FindMethod(errorInfo.Tok.pos);
+                LastRemovedItem[member].Item1.ParentList.Insert(LastRemovedItem[member].Item2, LastRemovedItem[member].Item1.Removable);
+                LastRemovedItem.Remove(member);
+            }
 
+            private MemberDecl FindMethod(int pos)
+            {
+                foreach (var member in LastRemovedItem.Keys) {
+                    if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos) {
+                        return member;
+                    }
+                }
+                throw new Exception("Could not find method");
             }
         }
 
@@ -559,40 +670,33 @@ namespace shorty
 
         public List<Wrap<T>> Remove<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary)
         {
+            List<Wrap<T>> removableWraps = new List<Wrap<T>>();
+            bool finished = false;
+            SimilRemoverStorage<T> similRemover = new SimilRemoverStorage<T>();
+            int index = 0;
             while (!finished) {
-                
+                finished = true;
+                foreach (var method in memberWrapDictionary.Keys) {
+                    if(memberWrapDictionary[method].Count <= index) continue;
+                    similRemover.LastRemovedItem.Add(method, RemoveOne(memberWrapDictionary[method][index]));
+                    finished = false;
+                }
+                index++;
+                _simpleVerifier.IsProgramValid(_program, similRemover.ErrorInformation);
+                foreach (var value in similRemover.LastRemovedItem.Values) {
+                    removableWraps.Add(value.Item1);
+                }
+                similRemover.LastRemovedItem = new Dictionary<MemberDecl, Tuple<Wrap<T>, int>>();
             }
-            Type type = typeof(SimiltaneousMethodRemover);
-
-            IRemover remover = (IRemover)Activator.CreateInstance(type);
-//            remover.Remove(something);
-            var removableWraps = new List<Wrap<T>>();
-//            foreach (var removableWrapObj ) {
-//                if(removableWrapObj is Wrap<T>)
-//                    removableWraps.Add((Wrap<T>)removableWrapObj));
-//            }
             return removableWraps;
         }
 
-//        private List<Wrap<T>> RemoveItemInEachMethod
-
-        public bool TryRemove<T>(Wrap<T> wrap)
+        private Tuple<Wrap<T>,int> RemoveOne<T>(Wrap<T> wrap)
         {
-            SimilRemoverStorage<T> similRemover = new SimilRemoverStorage<T>();
-
-            var parentBody = wrap.ParentList;
-            var removable = wrap.Removable;
-            var index = parentBody.IndexOf(removable);
-            parentBody.Remove(removable);
-            if (simpleVerifier.IsProgramValid(_program, similRemover.ErrorInformation))
-            {
-                return true;
-            }
-            parentBody.Insert(index, removable);
-            return false;
+            int position = wrap.ParentList.IndexOf(wrap.Removable);
+            wrap.ParentList.Remove(wrap.Removable);
+            return new Tuple<Wrap<T>, int>(wrap, position);
         }
-
-
     }
 
     internal class RemovalOrderTester<T>
@@ -650,9 +754,9 @@ namespace shorty
 
     internal class Simplifier
     {
-        private IRemover _remover;
-        private SimpleVerifier _verifier = new SimpleVerifier();
-        private Program _program;
+        private readonly OneAtATimeRemover _remover;
+        private readonly SimpleVerifier _verifier = new SimpleVerifier();
+        private readonly Program _program;
 
         public Simplifier(Program program)
         {

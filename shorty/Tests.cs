@@ -47,11 +47,12 @@ namespace shorty
         {
             Initialise();
             Program program = GetProgram("FindZero.dfy");
-            Shorty shorty = new Shorty(program);
+            Shorty shorty = new Shorty(program, new SimiltaneousMethodRemover(program));
 
             Assert.AreEqual(3, shorty.Asserts.Count);
             Assert.AreEqual(2, shorty.FindRemovableAsserts().Count);
             Assert.AreEqual(1, shorty.Asserts.Count);
+            Assert.True(shorty.IsProgramValid());
         }
 
         [Test]
@@ -59,11 +60,12 @@ namespace shorty
         {
             Initialise();
             Program program = GetProgram("ListCopy.dfy");
-            Shorty shorty = new Shorty(program);
+            Shorty shorty = new Shorty(program, new SimiltaneousMethodRemover(program));
 
             Assert.AreEqual(6, shorty.Invariants.Count);
             Assert.AreEqual(2, shorty.FindRemovableInvariants().Count);
             Assert.AreEqual(4, shorty.Invariants.Count);
+            Assert.True(shorty.IsProgramValid());
         }
 
         [Test]
@@ -71,11 +73,12 @@ namespace shorty
         {
             Initialise();
             Program program = GetProgram("Combinators.dfy");
-            Shorty shorty = new Shorty(program);
+            Shorty shorty = new Shorty(program, new SimiltaneousMethodRemover(program));
 
             Assert.AreEqual(4, shorty.Decreases.Count + shorty.DecreasesWildCards.Count);
             Assert.AreEqual(1, shorty.FindRemovableDecreases().Count);
             Assert.AreEqual(3, shorty.Decreases.Count + shorty.DecreasesWildCards.Count);
+            Assert.True(shorty.IsProgramValid());
         }
 
         [Test]
@@ -83,11 +86,12 @@ namespace shorty
         {
             Initialise();
             Program program = GetProgram("Streams.dfy");
-            Shorty shorty = new Shorty(program);
+            Shorty shorty = new Shorty(program, new SimiltaneousMethodRemover(program));
 
             Assert.AreEqual(21, shorty.LemmaCalls.Count);
             Assert.AreEqual(17, shorty.FindRemovableLemmaCalls().Count);
-            Assert.AreEqual(4, shorty.LemmaCalls.Count);//TODO make the counting work for the generic thingmy
+            Assert.AreEqual(4, shorty.LemmaCalls.Count);
+            Assert.True(shorty.IsProgramValid());
         }
 
         [Test]
@@ -95,11 +99,23 @@ namespace shorty
         {
             Initialise();
             Program program = GetProgram("CombinedAsserts.dfy");
-            Shorty shorty = new Shorty(program);
+            Shorty shorty = new Shorty(program, new SimiltaneousMethodRemover(program));
 
             List<Tuple<Statement, Statement>> simplifiedAsserts = shorty.GetSimplifiedAsserts();
             Assert.AreEqual(1, simplifiedAsserts.Count);
+            Assert.True(shorty.IsProgramValid());
             //TODO looking into the assertStmt to make sure it actually broke down
+        }
+
+        [Test]
+        public void TestCalcStatements()
+        {
+            Initialise();
+            Program program = GetProgram("Streams.dfy");
+            Shorty shorty = new Shorty(program, new OneAtATimeRemover(program));
+
+            List<Expression> lines = shorty.FindRemovableCalcLines();
+            List<BlockStmt> hints = shorty.FindRemovableCalcHints();
         }
     }
 }

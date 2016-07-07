@@ -139,10 +139,17 @@ namespace shorty
 
         private void FindRemovableTypesInCalcStmt(CalcStmt calc, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
         {
-            foreach (var hint in calc.Hints)
-                FindRemovableTypesInStatement(hint, calc, method, wildCardParent, classDecl);
-        }
+            //Need to add all hints except for the first and last
+            foreach (var hint in calc.Hints) {
+                _allRemovableTypes.AddCalcHint(new Wrap<BlockStmt>(hint, calc.Hints), method); // This adds the whole hint to calc hints to remove the whole hint
+                FindRemovableTypesInStatement(hint, calc, method, wildCardParent, classDecl); // This will check the inside of the hint - it will ID anything that can be shortened inside it.
+            }
 
+            for (int i = calc.Lines.Count-3; i >= 1 ; i--) {
+                _allRemovableTypes.AddCalcLine(new Wrap<Expression>(calc.Lines[i], calc.Lines), method); // This adds the calc Lines except the first and last as they are always required
+                
+            }
+        }
         private void FindRemovableTypesInForallStmt(ForallStmt forall, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
         {
             FindRemovableTypesInStatement(forall.Body, forall, method, wildCardParent, classDecl);
