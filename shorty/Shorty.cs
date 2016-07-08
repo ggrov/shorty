@@ -50,7 +50,6 @@ namespace shorty
             var removalTypeFinder = new RemovableTypeFinder(program);
             _allRemovableTypes = removalTypeFinder.FindRemovables();
             Remover = remover;
-            Contract.ContractFailed += Testere;
         }
 
         public Shorty(Program program)
@@ -519,18 +518,6 @@ namespace shorty
                 removables.Add(wrap.Removable);
             }
             return removables;
-        }
-    }
-
-    public class CalcWrap
-    {
-        public readonly Wrap<BlockStmt> HintWrap;
-        public readonly Wrap<Expression> LineWrap;
-
-        public CalcWrap(Wrap<BlockStmt> hint, Wrap<Expression> line)
-        {
-            HintWrap = hint;
-            LineWrap = line;
         }
     }
 
