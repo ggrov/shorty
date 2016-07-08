@@ -141,12 +141,11 @@ namespace shorty
         {
             //Need to add all hints except for the first and last
             foreach (var hint in calc.Hints) {
-                _allRemovableTypes.AddCalcHint(new Wrap<BlockStmt>(hint, calc.Hints), method); // This adds the whole hint to calc hints to remove the whole hint
                 FindRemovableTypesInStatement(hint, calc, method, wildCardParent, classDecl); // This will check the inside of the hint - it will ID anything that can be shortened inside it.
             }
 
             for (int i = calc.Lines.Count-3; i >= 1 ; i--) {
-                _allRemovableTypes.AddCalcLine(new Wrap<Expression>(calc.Lines[i], calc.Lines), method); // This adds the calc Lines except the first and last as they are always required
+                _allRemovableTypes.AddCalc(new CalcWrap(new Wrap<BlockStmt>(calc.Hints[i], calc.Hints),new Wrap<Expression>(calc.Lines[i], calc.Lines)),method);
                 
             }
         }

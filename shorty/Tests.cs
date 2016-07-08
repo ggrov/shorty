@@ -107,15 +107,18 @@ namespace shorty
             //TODO looking into the assertStmt to make sure it actually broke down
         }
 
-        [Test]
+        [Test] //[Ignore("Fails contract")]
         public void TestCalcStatements()
         {
             Initialise();
-            Program program = GetProgram("Streams.dfy");
+            Program program = GetProgram("Calc.dfy");
             Shorty shorty = new Shorty(program, new OneAtATimeRemover(program));
 
-            List<Expression> lines = shorty.FindRemovableCalcLines();
-            List<BlockStmt> hints = shorty.FindRemovableCalcHints();
+            var removedCalcs = shorty.FindRemovableCalcs();
+            Assert.AreEqual(3, removedCalcs.Count);
+            using (TextWriter writer = File.CreateText("H:\\dafny\\test-" + program.FullName)) {
+                shorty.PrintProgram(writer);
+            }
         }
     }
 }

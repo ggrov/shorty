@@ -161,9 +161,9 @@ namespace shorty
                 }
 
                 Console.WriteLine("Finding unnecesary asserts");
-                List<Expression> calcLines = shorty.FindRemovableCalcLines();
-                if (calcLines == null) {
-                    Console.WriteLine("Finding unnecessary calcLines failed");
+                var calcs = shorty.FindRemovableCalcs();
+                if (calcs == null) {
+                    Console.WriteLine("Finding unnecessary calcs failed");
                     failedAssertRemovalPrograms.Add(program);
                     continue;
                 }

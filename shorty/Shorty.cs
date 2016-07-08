@@ -46,11 +46,12 @@ namespace shorty
             var removalTypeFinder = new RemovableTypeFinder(program);
             _allRemovableTypes = removalTypeFinder.FindRemovables();
             Remover = remover;
+            Contract.ContractFailed += Testere;
         }
 
         private void Testere(object sender, ContractFailedEventArgs e)
         {
-            throw new NotImplementedException();
+            Console.WriteLine("djsnf'klsanf'kewanfwa");
         }
 
 
@@ -195,23 +196,23 @@ namespace shorty
 
         #region Calc Statements
 
-        public List<BlockStmt> FindRemovableCalcHints()
+        public List<Tuple<Expression, BlockStmt>> FindRemovableCalcs()
         {
-            var removedCalcs = Remover.Remove(_allRemovableTypes.GetCalcHintDictionary());
-            foreach (var removedCalc in removedCalcs) {
-                _allRemovableTypes.RemoveCalcHint(removedCalc);
-            }
-            return Wrap<BlockStmt>.GetRemovables(removedCalcs);
+            return FindRemovableCalcs(new CalcRemover(Program));
         }
 
-        public List<Expression> FindRemovableCalcLines()
+        public List<Tuple<Expression, BlockStmt>> FindRemovableCalcs(CalcRemover calcRemover)
         {
-            var removedCalcs = Remover.Remove(_allRemovableTypes.GetCalcLineDictionary());
+            
+            var removedCalcs = calcRemover.Remove(_allRemovableTypes.GetCalcDictionary());
+            var removedCalcTuples = new List<Tuple<Expression, BlockStmt>>();
             foreach (var removedCalc in removedCalcs) {
-                _allRemovableTypes.RemoveCalcLine(removedCalc);
+                _allRemovableTypes.RemoveCalc(removedCalc);
+                removedCalcTuples.Add(new Tuple<Expression, BlockStmt>(removedCalc.LineWrap.Removable, removedCalc.HintWrap.Removable));
             }
-            return Wrap<Expression>.GetRemovables(removedCalcs);
+            return removedCalcTuples;
         }
+
 
         #endregion
 
@@ -326,21 +327,12 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<Wrap<Expression>> CalcLines {
+        public ReadOnlyCollection<CalcWrap> Calcs {
             get {
-                var calcLines = new List<Wrap<Expression>>();
+                var calcLines = new List<CalcWrap>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
-                    calcLines.AddRange(removableTypes.CalcLines);
+                    calcLines.AddRange(removableTypes.Calcs);
                 return calcLines.AsReadOnly();
-            }
-        }
-
-        public ReadOnlyCollection<Wrap<BlockStmt>> CalcHints {
-            get {
-                var calcHints = new List<Wrap<BlockStmt>>();
-                foreach (var removableTypes in RemovableTypesInMethods.Values)
-                    calcHints.AddRange(removableTypes.CalcHints);
-                return calcHints.AsReadOnly();
             }
         }
 
@@ -382,17 +374,12 @@ namespace shorty
             RemovableTypesInMethods[member].LemmaCalls.Add(lemmaCall);
         }
 
-        public void AddCalcLine(Wrap<Expression> calcLine, MemberDecl member)
+        public void AddCalc(CalcWrap calc, MemberDecl member)
         {
             AddMember(member);
-            RemovableTypesInMethods[member].CalcLines.Add(calcLine);
+            RemovableTypesInMethods[member].Calcs.Add(calc);
         }
 
-        public void AddCalcHint(Wrap<BlockStmt> calcLine, MemberDecl member)
-        {
-            AddMember(member);
-            RemovableTypesInMethods[member].CalcHints.Add(calcLine);
-        }
 
         #endregion
 
@@ -443,22 +430,12 @@ namespace shorty
             }
         }
 
-        public void RemoveCalcLine(Wrap<Expression> calcLine)
+        public void RemoveCalc(CalcWrap calc)
         {
             foreach (var removableTypesInMethods in RemovableTypesInMethods)
             {
-                if (!removableTypesInMethods.Value.CalcLines.Contains(calcLine)) continue;
-                removableTypesInMethods.Value.CalcLines.Remove(calcLine);
-                return;
-            }
-        }
-
-        public void RemoveCalcHint(Wrap<BlockStmt> calcHint)
-        {
-            foreach (var removableTypesInMethods in RemovableTypesInMethods)
-            {
-                if (!removableTypesInMethods.Value.CalcHints.Contains(calcHint)) continue;
-                removableTypesInMethods.Value.CalcHints.Remove(calcHint);
+                if (!removableTypesInMethods.Value.Calcs.Contains(calc)) continue;
+                removableTypesInMethods.Value.Calcs.Remove(calc);
                 return;
             }
         }
@@ -503,23 +480,15 @@ namespace shorty
             return dictionary;
         }
 
-        public Dictionary<MemberDecl, List<Wrap<BlockStmt>>> GetCalcHintDictionary()
+        public Dictionary<MemberDecl, List<CalcWrap>> GetCalcDictionary()
         {
-            var dictionary = new Dictionary<MemberDecl, List<Wrap<BlockStmt>>>();
+            var dictionary = new Dictionary<MemberDecl, List<CalcWrap>>();
             foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
-                dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.CalcHints);
+                dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.Calcs);
             }
             return dictionary;
         }
 
-        public Dictionary<MemberDecl, List<Wrap<Expression>>> GetCalcLineDictionary()
-        {
-            var dictionary = new Dictionary<MemberDecl, List<Wrap<Expression>>>();
-            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
-                dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.CalcLines);
-            }
-            return dictionary;
-        }
 
         #endregion
     }
@@ -532,8 +501,7 @@ namespace shorty
         public readonly List<Wrap<Expression>> Decreases = new List<Wrap<Expression>>();
         public readonly List<WildCardDecreases> WildCardDecreaseses = new List<WildCardDecreases>();
         public readonly List<Wrap<Statement>> LemmaCalls = new List<Wrap<Statement>>();
-        public readonly List<Wrap<BlockStmt>> CalcHints = new List<Wrap<BlockStmt>>();
-        public readonly List<Wrap<Expression>> CalcLines = new List<Wrap<Expression>>();
+        public readonly List<CalcWrap> Calcs = new List<CalcWrap>();
 
         public RemovableTypesInMember(MemberDecl member)
         {
@@ -562,6 +530,18 @@ namespace shorty
         }
     }
 
+    public class CalcWrap
+    {
+        public readonly Wrap<BlockStmt> HintWrap;
+        public readonly Wrap<Expression> LineWrap;
+
+        public CalcWrap(Wrap<BlockStmt> hint, Wrap<Expression> line)
+        {
+            HintWrap = hint;
+            LineWrap = line;
+        }
+    }
+
     internal class WildCardDecreases
     {
         public readonly Expression Expression;
@@ -578,6 +558,57 @@ namespace shorty
             Expression = decreasesExpression;
             ParentSpecification = parentSpecification;
             ParentWildCardDecreases = parentWildCardDecreases;
+        }
+    }
+
+    class CalcRemover
+    {
+        SimpleVerifier verifier = new SimpleVerifier();
+        private Program _program;
+
+        public CalcRemover(Program program)
+        {
+            _program = program;
+        }
+
+        public List<CalcWrap> Remove(Dictionary<MemberDecl, List<CalcWrap>> memberWrapDictionary)
+        {
+            var removableWraps = new List<CalcWrap>();
+            foreach (var wraps in memberWrapDictionary.Values)
+            {
+                removableWraps.AddRange(RemoveWraps(wraps));
+            }
+            return removableWraps;
+        }
+
+        public List<CalcWrap> RemoveWraps(List<CalcWrap> wraps)
+        {
+            var removableWraps = new List<CalcWrap>();
+            foreach (var wrap in wraps) {
+                if(!TryRemove(wrap.LineWrap, wrap.HintWrap)) continue;
+                removableWraps.Add(wrap);
+            }
+            return removableWraps;
+
+        }
+
+        public bool TryRemove(Wrap<Expression> line, Wrap<BlockStmt> hint)
+        {
+            var lineIndex = line.ParentList.IndexOf(line.Removable);
+            var hintIndex = hint.ParentList.IndexOf(hint.Removable);
+            // We should also never be trying to remove the first or last line
+            Contract.Assert(lineIndex != 0);
+            Contract.Assert(lineIndex != line.ParentList.Count - 1);
+            line.ParentList.Remove(line.Removable);
+            hint.ParentList.Remove(hint.Removable);
+            if (verifier.IsProgramValid(_program))
+            {
+                return true;
+            }
+            line.ParentList.Insert(lineIndex, line.Removable);
+            hint.ParentList.Insert(hintIndex, hint.Removable);
+            //TODO: try and remove everything inside the hint
+            return false;
         }
     }
 
