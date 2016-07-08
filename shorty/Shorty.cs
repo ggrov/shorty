@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Net;
 using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 using Type = System.Type;
@@ -196,21 +197,14 @@ namespace shorty
 
         #region Calc Statements
 
-        public List<Tuple<Expression, BlockStmt>> FindRemovableCalcs()
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> FindRemovableCalcs()
         {
             return FindRemovableCalcs(new CalcRemover(Program));
         }
 
-        public List<Tuple<Expression, BlockStmt>> FindRemovableCalcs(CalcRemover calcRemover)
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> FindRemovableCalcs(CalcRemover calcRemover)
         {
-            
-            var removedCalcs = calcRemover.Remove(_allRemovableTypes.GetCalcDictionary());
-            var removedCalcTuples = new List<Tuple<Expression, BlockStmt>>();
-            foreach (var removedCalc in removedCalcs) {
-                _allRemovableTypes.RemoveCalc(removedCalc);
-                removedCalcTuples.Add(new Tuple<Expression, BlockStmt>(removedCalc.LineWrap.Removable, removedCalc.HintWrap.Removable));
-            }
-            return removedCalcTuples;
+            return calcRemover.Remove(_allRemovableTypes.GetCalcDictionary());
         }
 
 
@@ -327,12 +321,13 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<CalcWrap> Calcs {
+        public ReadOnlyCollection<CalcStmt> Calcs
+        {
             get {
-                var calcLines = new List<CalcWrap>();
+                var calcs = new List<CalcStmt>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
-                    calcLines.AddRange(removableTypes.Calcs);
-                return calcLines.AsReadOnly();
+                    calcs.AddRange(removableTypes.Calcs);
+                return calcs.AsReadOnly();
             }
         }
 
@@ -374,7 +369,7 @@ namespace shorty
             RemovableTypesInMethods[member].LemmaCalls.Add(lemmaCall);
         }
 
-        public void AddCalc(CalcWrap calc, MemberDecl member)
+        public void AddCalc(CalcStmt calc, MemberDecl member)
         {
             AddMember(member);
             RemovableTypesInMethods[member].Calcs.Add(calc);
@@ -430,7 +425,7 @@ namespace shorty
             }
         }
 
-        public void RemoveCalc(CalcWrap calc)
+        public void RemoveCalc(CalcStmt calc)
         {
             foreach (var removableTypesInMethods in RemovableTypesInMethods)
             {
@@ -480,9 +475,9 @@ namespace shorty
             return dictionary;
         }
 
-        public Dictionary<MemberDecl, List<CalcWrap>> GetCalcDictionary()
+        public Dictionary<MemberDecl, List<CalcStmt>> GetCalcDictionary()
         {
-            var dictionary = new Dictionary<MemberDecl, List<CalcWrap>>();
+            var dictionary = new Dictionary<MemberDecl, List<CalcStmt>>();
             foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
                 dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.Calcs);
             }
@@ -501,7 +496,7 @@ namespace shorty
         public readonly List<Wrap<Expression>> Decreases = new List<Wrap<Expression>>();
         public readonly List<WildCardDecreases> WildCardDecreaseses = new List<WildCardDecreases>();
         public readonly List<Wrap<Statement>> LemmaCalls = new List<Wrap<Statement>>();
-        public readonly List<CalcWrap> Calcs = new List<CalcWrap>();
+        public readonly List<CalcStmt> Calcs = new List<CalcStmt>();
 
         public RemovableTypesInMember(MemberDecl member)
         {
@@ -563,6 +558,17 @@ namespace shorty
 
     class CalcRemover
     {
+        /// <summary>
+        /// How this is going to work:
+        /// iterate through each line
+        /// with each line, iterate through each hint
+        /// Try and remove both until it succeeds - if it doesn't succeed, it can't be removed
+        /// 
+        /// after all of that, try and remove the insides of each block by removing the body
+        /// If a hint was originally not empty but successfully made empty, add it to the removable hints
+        /// </summary>
+
+
         SimpleVerifier verifier = new SimpleVerifier();
         private Program _program;
 
@@ -571,42 +577,98 @@ namespace shorty
             _program = program;
         }
 
-        public List<CalcWrap> Remove(Dictionary<MemberDecl, List<CalcWrap>> memberWrapDictionary)
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> Remove(Dictionary<MemberDecl, List<CalcStmt>> memberWrapDictionary)
         {
-            var removableWraps = new List<CalcWrap>();
-            foreach (var wraps in memberWrapDictionary.Values)
+            var removableLines = new List<Expression>();
+            var removableHints = new List<BlockStmt>();
+            var removableOps = new List<CalcStmt.CalcOp>();
+            foreach (var calcList in memberWrapDictionary.Values) {
+                foreach (var calc in calcList) {
+                    var calcResults = RemoveFromCalc(calc);
+                    removableLines.AddRange(calcResults.Item1);
+                    removableHints.AddRange(calcResults.Item2);
+                    removableOps.AddRange(calcResults.Item3);
+                }
+            }
+            return new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(removableLines, removableHints, removableOps);
+        }
+
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> RemoveFromCalc(CalcStmt calc)
+        {
+            var removableLines = new List<Expression>();
+            var removableHints = new List<BlockStmt>();
+            var removableOps = new List<CalcStmt.CalcOp>();
+            var stepOps = calc.StepOps;
+            var lines = calc.Lines;
+            var hints = calc.Hints;
+
+            //find lines and associated hints that can be removed
+            for (var i = 1; i < lines.Count - 2; i++) // We don't want to touch the last two (dummy and last item)
             {
-                removableWraps.AddRange(RemoveWraps(wraps));
+                var line = lines[i];
+                for (int j = 0; j < hints.Count; j++) {
+                    var hint = hints[j];
+                    var stepOp = stepOps[j];
+                    if (!TryRemove(new Wrap<Expression>(line, lines), new Wrap<BlockStmt>(hint, hints), new Wrap<CalcStmt.CalcOp>(stepOp, stepOps))) continue;
+                    i--; //We have to go back one as a line has been removed all following ones will be moved back aswell
+                    removableLines.Add(line);
+                    removableOps.Add(stepOp);
+                    if(hint.Body.Count > 0) //Don't need to return hints that are already "invisible"
+                        removableHints.Add(hint);
+                    break;
+                }
             }
-            return removableWraps;
+
+            //find other hints that can be removed
+            foreach (var hint in hints) {
+                if(hint.Body.Count == 0) continue;
+                List<Statement> body = new List<Statement>();
+                CloneTo(hint.Body, body);
+                //emptyTheBody - have to do it this way as it is readonly
+                for (int i = 0; i < hint.Body.Count; i++) {
+                    var item = hint.Body[i];
+                    hint.Body.Remove(item);
+                }
+                if (verifier.IsProgramValid(_program)) {
+                    removableHints.Add(hint);
+                }
+                else {
+                    CloneTo(body, hint.Body);
+                }
+            }
+
+            return new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(removableLines, removableHints, removableOps);
         }
 
-        public List<CalcWrap> RemoveWraps(List<CalcWrap> wraps)
+        public static void CloneTo(List<Statement> listToClone, List<Statement> listToCloneInto)
         {
-            var removableWraps = new List<CalcWrap>();
-            foreach (var wrap in wraps) {
-                if(!TryRemove(wrap.LineWrap, wrap.HintWrap)) continue;
-                removableWraps.Add(wrap);
+            Contract.Requires(listToClone != null);
+            //Clear out list
+            foreach (var item in listToCloneInto) {
+                listToCloneInto.Remove(item);
             }
-            return removableWraps;
+            foreach (var item in listToClone) {
+                listToCloneInto.Add(item);
+            }
 
         }
 
-        public bool TryRemove(Wrap<Expression> line, Wrap<BlockStmt> hint)
+        public bool TryRemove(Wrap<Expression> line, Wrap<BlockStmt> hint, Wrap<CalcStmt.CalcOp> op)
         {
             var lineIndex = line.ParentList.IndexOf(line.Removable);
             var hintIndex = hint.ParentList.IndexOf(hint.Removable);
+            var opIndex = op.ParentList.IndexOf(op.Removable);
             // We should also never be trying to remove the first or last line
             Contract.Assert(lineIndex != 0);
             Contract.Assert(lineIndex != line.ParentList.Count - 1);
             line.ParentList.Remove(line.Removable);
             hint.ParentList.Remove(hint.Removable);
+            op.ParentList.Remove(op.Removable);
             if (verifier.IsProgramValid(_program))
-            {
                 return true;
-            }
             line.ParentList.Insert(lineIndex, line.Removable);
             hint.ParentList.Insert(hintIndex, hint.Removable);
+            op.ParentList.Insert(opIndex, op.Removable);
             //TODO: try and remove everything inside the hint
             return false;
         }
