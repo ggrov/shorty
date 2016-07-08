@@ -1,4 +1,4 @@
-datatype natr = Zero | Succ(natr);
+datatype natr = Zero | Succ(natr)
 
 function add(x: natr, y: natr): natr
 {

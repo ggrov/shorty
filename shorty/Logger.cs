@@ -32,22 +32,27 @@ namespace shorty
 
         private void EnsureProgramsVerify()
         {
-            for (int i = Programs.Count - 1; i >= 0; i--)
-            {
-                Console.WriteLine("Checking " + Programs[i].FullName);
-                Program copy = CloneProgram(Programs[i]);
-                Shorty shorty = new Shorty(copy);
-                if (!shorty.IsProgramValid())
-                {
+            for (int i = Programs.Count - 1; i >= 0; i--) {
+                try {
+                    Console.WriteLine("Checking " + Programs[i].FullName);
+                    Program copy = CloneProgram(Programs[i]);
+                    Shorty shorty = new Shorty(copy);
+                    if (!shorty.IsProgramValid()) {
+                        InvalidPrograms.Add(Programs[i]);
+                        Programs.Remove(Programs[i]);
+                        Console.WriteLine("Program {0} is not valid", copy.Name);
+                    }
+                    else {
+                        Console.WriteLine("Program {0} is valid", copy.Name);
+                    }
+                }
+                catch {
                     InvalidPrograms.Add(Programs[i]);
                     Programs.Remove(Programs[i]);
-                    Console.WriteLine("Program {0} is not valid!", copy.Name);
+                    Console.WriteLine("Program {0} is not valid!", Programs[i].Name);
                 }
-                else {
-                    Console.WriteLine("Program {0} is vailid! :D", copy.Name);
-                }
-                //Console.ReadLine();
             }
+
         }
 
         private Program CloneProgram(Program program)
@@ -93,6 +98,14 @@ namespace shorty
 
             var decreasesData = DecreasesRemoval();
             LogTupleListData(decreasesData);
+
+
+            //Calc
+            _tw.WriteLine("Calc Simplification");
+            _tw.WriteLine("\nProgram Name, Calc Parts Before, Calc Parts After, Calc Parts Removed, Removal Percentage, Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
+
+            var calcData = CalcSimplification();
+            LogTupleListData(calcData);
         }
 
         private void LogTupleListData(List<Tuple<string, int, int, float, float, float>> data)
@@ -165,11 +178,7 @@ namespace shorty
                     
                     if (i == 0) {
                         //Find out how many asserts were in the program before the removal - only do on first run
-//                        foreach (var method in shorty.Asserts.Keys) {
-//                            foreach (var stmt in shorty.Asserts[method].Keys) {
-//                                assertsBefore += shorty.Asserts[method][stmt].Count;                                
-//                            }
-//                        }
+                        assertsBefore = shorty.Asserts.Count;
                     }
 
                     var sw = new Stopwatch();
@@ -223,7 +232,7 @@ namespace shorty
                     var programClone = CloneProgram(program);
                     var shorty = new Shorty(programClone);
 
-                    //Find the verificaiton time before the shorty method is run
+                    //Find the verification time before the shorty method is run
                     averageTimeBefore += FindExecutionTime(programClone);
 
                     if (i == 0) {
@@ -280,7 +289,7 @@ namespace shorty
                     var programClone = CloneProgram(program);
                     var shorty = new Shorty(programClone);
 
-                    //Find the verificaiton time before the shorty method is run
+                    //Find the verification time before the shorty method is run
                     averageTimeBefore += FindExecutionTime(programClone);
 
                     if (i == 0) {
@@ -338,7 +347,7 @@ namespace shorty
                     var programClone = CloneProgram(program);
                     var shorty = new Shorty(programClone);
 
-                    //Find the verificaiton time before the shorty method is run
+                    //Find the verification time before the shorty method is run
                     averageTimeBefore += FindExecutionTime(programClone);
                     
                     if (i == 0) {
@@ -379,6 +388,69 @@ namespace shorty
                     averageExecutionTime, averageTimeBefore, averageTimeAfter));
             }
             return decreasesData;
+        }
+
+        public List<Tuple<string, int, int, float, float, float>> CalcSimplification()
+        {
+            var calcData = new List<Tuple<string, int, int, float, float, float>>();
+
+            foreach (var program in Programs) {
+                Console.WriteLine("\nSimplifying calcs from {0}", program.FullName);
+                var calcsBefore = 0;
+                var calcsRemoved = 0;
+                float averageExecutionTime = 0;
+                var valid = true;
+                float averageTimeBefore = 0;
+                float averageTimeAfter = 0;
+
+                for (var i = 0; i < _numberOfTests; i++) {
+                    var programClone = CloneProgram(program);
+                    var shorty = new Shorty(programClone);
+
+                    //Find the verification time before the shorty method is run
+                    averageTimeBefore += FindExecutionTime(programClone);
+                    
+                    if (i == 0) {
+                        //Find out how many invariants were in the program before the removal - only do on first run
+                        foreach (var calcStmt in shorty.Calcs) {
+                            foreach (var hint in calcStmt.Hints) {
+                                if (hint.Body.Count > 0)
+                                    calcsBefore++;
+                            }
+                            calcsBefore += calcStmt.Lines.Count - 1; // -1 because of the dummy
+                        }
+                    }
+
+                    var sw = new Stopwatch();
+                    sw.Start();
+                    var calcs = shorty.FindRemovableCalcs();
+                    sw.Stop();
+                    if (calcs == null) {
+                        _tw.WriteLine(program.Name + "Failed to find calcs");
+                        valid = false;
+                        break;
+                    }
+
+                    averageExecutionTime += sw.ElapsedMilliseconds;
+                    averageTimeAfter += FindExecutionTime(programClone);
+
+                    //Gather all other needed information in the first run
+                    if (i == 0) {
+                        calcsRemoved = calcs.Item1.Count + calcs.Item2.Count; //skip out the calcops because they're not really needed
+                    }
+                }
+
+                if (!valid)
+                    continue;
+
+                //Calculate average execution time and
+                averageExecutionTime = averageExecutionTime/_numberOfTests;
+                averageTimeBefore = averageTimeBefore / _numberOfTests;
+                averageTimeAfter = averageTimeAfter / _numberOfTests;
+                calcData.Add(new Tuple<string, int, int, float, float, float>(program.FullName, calcsBefore, calcsRemoved, 
+                    averageExecutionTime, averageTimeBefore, averageTimeAfter));
+                }
+            return calcData;
         }
     }
 }

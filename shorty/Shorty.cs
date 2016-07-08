@@ -33,6 +33,9 @@ namespace shorty
         public ReadOnlyCollection<Wrap<Statement>> LemmaCalls {
             get { return _allRemovableTypes.LemmaCalls; }
         }
+        public ReadOnlyCollection<CalcStmt> Calcs {
+            get { return _allRemovableTypes.Calcs; }
+        }
         public IRemover Remover { get; set; }
 
         #region Initialisation
@@ -49,12 +52,6 @@ namespace shorty
             Remover = remover;
             Contract.ContractFailed += Testere;
         }
-
-        private void Testere(object sender, ContractFailedEventArgs e)
-        {
-            Console.WriteLine("djsnf'klsanf'kewanfwa");
-        }
-
 
         public Shorty(Program program)
         {
