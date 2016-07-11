@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Dafny;
@@ -132,14 +133,30 @@ namespace shorty
             else if (statement is ForallStmt)
                 FindRemovableTypesInForallStmt((ForallStmt) statement, method, wildCardParent, classDecl);
             else if (statement is CalcStmt)
-                FindRemovableTypesInCalcStmt((CalcStmt) statement, method, wildCardParent, classDecl);
+                FindRemovableTypesInCalcStmt((CalcStmt) statement, parent, method, wildCardParent, classDecl);
             else if (statement is UpdateStmt)
                 FindRemovableTypesInUpdateStmt((UpdateStmt) statement, parent, method, classDecl);
         }
 
-        private void FindRemovableTypesInCalcStmt(CalcStmt calc, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
+        private void FindRemovableTypesInCalcStmt(CalcStmt calc, Statement parent, Method method, WildCardDecreases wildCardParent, ClassDecl classDecl)
         {
-            _allRemovableTypes.AddCalc(calc, method);
+            Wrap<Statement> calcWrap = null;
+            if (parent is BlockStmt)
+                calcWrap = new Wrap<Statement>(calc, ((BlockStmt)parent).Body);
+            else if (parent is MatchStmt) {
+                var matchStmt = (MatchStmt) parent;
+                foreach (var matchCase in matchStmt.Cases) {
+                    if (!matchCase.Body.Contains(calc)) continue;
+                    calcWrap = new Wrap<Statement>(calc, matchCase.Body);
+                    break;
+                }
+                if (calcWrap == null) throw  new Exception("Calc not found!");
+            }
+            else {
+                throw new Exception("Calc not found!");
+            }
+
+            _allRemovableTypes.AddCalc(calcWrap, method);
             foreach (var hint in calc.Hints) {
                 FindRemovableTypesInStatement(hint, calc, method, wildCardParent, classDecl); // This will check the inside of the hint - it will ID anything that can be shortened inside it.
             }

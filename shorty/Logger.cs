@@ -412,7 +412,8 @@ namespace shorty
                     
                     if (i == 0) {
                         //Find out how many invariants were in the program before the removal - only do on first run
-                        foreach (var calcStmt in shorty.Calcs) {
+                        foreach (var calcWrap in shorty.Calcs) {
+                            var calcStmt = (CalcStmt) calcWrap.Removable;
                             foreach (var hint in calcStmt.Hints) {
                                 if (hint.Body.Count > 0)
                                     calcsBefore++;

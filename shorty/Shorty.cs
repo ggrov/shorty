@@ -33,7 +33,7 @@ namespace shorty
         public ReadOnlyCollection<Wrap<Statement>> LemmaCalls {
             get { return _allRemovableTypes.LemmaCalls; }
         }
-        public ReadOnlyCollection<CalcStmt> Calcs {
+        public ReadOnlyCollection<Wrap<Statement>> Calcs {
             get { return _allRemovableTypes.Calcs; }
         }
         public IRemover Remover { get; set; }
@@ -193,12 +193,12 @@ namespace shorty
 
         #region Calc Statements
 
-        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> FindRemovableCalcs()
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>> FindRemovableCalcs()
         {
             return FindRemovableCalcs(new CalcRemover(Program));
         }
 
-        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> FindRemovableCalcs(CalcRemover calcRemover)
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>> FindRemovableCalcs(CalcRemover calcRemover)
         {
             return calcRemover.Remove(_allRemovableTypes.GetCalcDictionary());
         }
@@ -317,10 +317,10 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<CalcStmt> Calcs
+        public ReadOnlyCollection<Wrap<Statement>> Calcs
         {
             get {
-                var calcs = new List<CalcStmt>();
+                var calcs = new List<Wrap<Statement>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
                     calcs.AddRange(removableTypes.Calcs);
                 return calcs.AsReadOnly();
@@ -365,7 +365,7 @@ namespace shorty
             RemovableTypesInMethods[member].LemmaCalls.Add(lemmaCall);
         }
 
-        public void AddCalc(CalcStmt calc, MemberDecl member)
+        public void AddCalc(Wrap<Statement> calc, MemberDecl member)
         {
             AddMember(member);
             RemovableTypesInMethods[member].Calcs.Add(calc);
@@ -421,7 +421,7 @@ namespace shorty
             }
         }
 
-        public void RemoveCalc(CalcStmt calc)
+        public void RemoveCalc(Wrap<Statement> calc)
         {
             foreach (var removableTypesInMethods in RemovableTypesInMethods)
             {
@@ -471,9 +471,9 @@ namespace shorty
             return dictionary;
         }
 
-        public Dictionary<MemberDecl, List<CalcStmt>> GetCalcDictionary()
+        public Dictionary<MemberDecl, List<Wrap<Statement>>> GetCalcDictionary()
         {
-            var dictionary = new Dictionary<MemberDecl, List<CalcStmt>>();
+            var dictionary = new Dictionary<MemberDecl, List<Wrap<Statement>>>();
             foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
                 dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.Calcs);
             }
@@ -492,7 +492,7 @@ namespace shorty
         public readonly List<Wrap<Expression>> Decreases = new List<Wrap<Expression>>();
         public readonly List<WildCardDecreases> WildCardDecreaseses = new List<WildCardDecreases>();
         public readonly List<Wrap<Statement>> LemmaCalls = new List<Wrap<Statement>>();
-        public readonly List<CalcStmt> Calcs = new List<CalcStmt>();
+        public readonly List<Wrap<Statement>> Calcs = new List<Wrap<Statement>>();
 
         public RemovableTypesInMember(MemberDecl member)
         {
@@ -561,20 +561,26 @@ namespace shorty
             _program = program;
         }
 
-        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> Remove(Dictionary<MemberDecl, List<CalcStmt>> memberWrapDictionary)
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>> Remove(Dictionary<MemberDecl, List<Wrap<Statement>>> memberWrapDictionary)
         {
             var removableLines = new List<Expression>();
             var removableHints = new List<BlockStmt>();
             var removableOps = new List<CalcStmt.CalcOp>();
+            var removableCalcStmts = new List<CalcStmt>();
             foreach (var calcList in memberWrapDictionary.Values) {
-                foreach (var calc in calcList) {
-                    var calcResults = RemoveFromCalc(calc);
+                foreach (var calcWrap in calcList) {
+                    var remover = new OneAtATimeRemover(_program);
+                    if (remover.TryRemove(calcWrap)) {
+                        removableCalcStmts.Add((CalcStmt)calcWrap.Removable);
+                        continue;
+                    }
+                    var calcResults = RemoveFromCalc((CalcStmt)calcWrap.Removable);
                     removableLines.AddRange(calcResults.Item1);
                     removableHints.AddRange(calcResults.Item2);
                     removableOps.AddRange(calcResults.Item3);
                 }
             }
-            return new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(removableLines, removableHints, removableOps);
+            return new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>>(removableLines, removableHints, removableOps, removableCalcStmts);
         }
 
         public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> RemoveFromCalc(CalcStmt calc)

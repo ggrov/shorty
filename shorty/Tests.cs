@@ -118,8 +118,9 @@ namespace shorty
             using (TextWriter writer = File.CreateText("H:\\dafny\\test-" + program.FullName)) {
                 shorty.PrintProgram(writer);
             }
-            Assert.AreEqual(4, removedCalcs.Item1.Count);
-            Assert.AreEqual(2, removedCalcs.Item2.Count);
+            Assert.AreEqual(3, removedCalcs.Item1.Count);
+            Assert.AreEqual(1, removedCalcs.Item2.Count);
+            Assert.AreEqual(1, removedCalcs.Item4.Count);
         }
     }
 }
