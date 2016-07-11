@@ -454,4 +454,39 @@ namespace shorty
             return calcData;
         }
     }
+
+    abstract class LogFinder
+    {
+        protected Program Program;
+        private readonly int _numberOfTests;
+
+        protected LogFinder(Program program, int numberOfTests)
+        {
+            Program = program;
+            _numberOfTests = numberOfTests;
+        }
+
+        public List<Tuple<string, int, int, float, float, float>> GetLogData()
+        {
+            var data = new List<Tuple<string, int, int, float, float, float>>();
+            var countBefore = 0;
+            var countAfter = 0;
+            float averageExecutionTime = 0;
+            var valid = true;
+            float averageTimeBefore = 0;
+            float averageTimeAfter = 0;
+            for (var i = 0; i < _numberOfTests; i++) {
+                
+            }
+
+            return data;
+        }
+
+        public abstract List<T> GetRemovedItems<T>();
+
+        public abstract List<T> GetCount<T>();
+
+    }
+
+
 }

@@ -32,26 +32,30 @@ namespace shorty
 //            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\results.txt")) {
                 bool betterSolutionFound = false;
                 foreach (var program in programs) {
-                    Shorty shorty = new Shorty(program);
-                    Dictionary<Method,List<List<Statement>>> solutions = shorty.TestDifferentAssertRemovals();
+                    try {
+                        Shorty shorty = new Shorty(program);
+                        Dictionary<Method, List<List<Statement>>> solutions = shorty.TestDifferentAssertRemovals();
 
-                    foreach (Method method in solutions.Keys) {
-                        int i = 0;
-                        int firstValue = solutions[method][i].Count;
-                        writer.WriteLine("Method: "+method.Name);
-                        foreach (var asserts in solutions[method]) {
-                            writer.Write("Solution " + ++i + " | length " + asserts.Count);
-                            if (asserts.Count >= firstValue && i > 1) {
-                                writer.WriteLine(" | BETTER OR SAME AS FIRST!!!!!!!!!");
-                                betterSolutionFound = true;
-                            }
-                            else {
-                                writer.WriteLine();
+                        foreach (Method method in solutions.Keys) {
+                            int i = 0;
+                            int firstValue = solutions[method][i].Count;
+                            writer.WriteLine("Method: " + method.Name);
+                            foreach (var asserts in solutions[method]) {
+                                writer.Write("Solution " + ++i + " | length " + asserts.Count);
+                                if (asserts.Count >= firstValue && i > 1) {
+                                    writer.WriteLine(" | BETTER OR SAME AS FIRST!!!!!!!!!");
+                                    betterSolutionFound = true;
+                                }
+                                else {
+                                    writer.WriteLine();
+                                }
                             }
                         }
+
                     }
-
-
+                    catch {
+                        // ignored
+                    }
                 }
                 writer.WriteLine(betterSolutionFound ? "A better solution was found!" : "No better solution was found");
             }

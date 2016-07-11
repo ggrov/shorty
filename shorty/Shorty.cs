@@ -18,24 +18,31 @@ namespace shorty
         public Program Program { get; private set; }
 
         private readonly AllRemovableTypes _allRemovableTypes;
+
         public ReadOnlyCollection<Wrap<Statement>> Asserts {
             get { return _allRemovableTypes.Asserts; }
         }
+
         public ReadOnlyCollection<Wrap<MaybeFreeExpression>> Invariants {
             get { return _allRemovableTypes.Invariants; }
         }
+
         public ReadOnlyCollection<Wrap<Expression>> Decreases {
             get { return _allRemovableTypes.Decreases; }
         }
+
         public ReadOnlyCollection<WildCardDecreases> DecreasesWildCards {
             get { return _allRemovableTypes.WildCardDecreaseses; }
         }
+
         public ReadOnlyCollection<Wrap<Statement>> LemmaCalls {
             get { return _allRemovableTypes.LemmaCalls; }
         }
+
         public ReadOnlyCollection<Wrap<Statement>> Calcs {
             get { return _allRemovableTypes.Calcs; }
         }
+
         public IRemover Remover { get; set; }
 
         #region Initialisation
@@ -203,7 +210,6 @@ namespace shorty
             return calcRemover.Remove(_allRemovableTypes.GetCalcDictionary());
         }
 
-
         #endregion
 
         #region validation
@@ -317,8 +323,7 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<Wrap<Statement>> Calcs
-        {
+        public ReadOnlyCollection<Wrap<Statement>> Calcs {
             get {
                 var calcs = new List<Wrap<Statement>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
@@ -371,7 +376,6 @@ namespace shorty
             RemovableTypesInMethods[member].Calcs.Add(calc);
         }
 
-
         #endregion
 
         #region Removal Methods
@@ -423,8 +427,7 @@ namespace shorty
 
         public void RemoveCalc(Wrap<Statement> calc)
         {
-            foreach (var removableTypesInMethods in RemovableTypesInMethods)
-            {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods) {
                 if (!removableTypesInMethods.Value.Calcs.Contains(calc)) continue;
                 removableTypesInMethods.Value.Calcs.Remove(calc);
                 return;
@@ -479,7 +482,6 @@ namespace shorty
             }
             return dictionary;
         }
-
 
         #endregion
     }
@@ -551,9 +553,8 @@ namespace shorty
         /// after all of that, try and remove the insides of each block by removing the body
         /// If a hint was originally not empty but successfully made empty, add it to the removable hints
         /// </summary>
-
-
         SimpleVerifier verifier = new SimpleVerifier();
+
         private Program _program;
 
         public CalcRemover(Program program)
@@ -571,10 +572,10 @@ namespace shorty
                 foreach (var calcWrap in calcList) {
                     var remover = new OneAtATimeRemover(_program);
                     if (remover.TryRemove(calcWrap)) {
-                        removableCalcStmts.Add((CalcStmt)calcWrap.Removable);
+                        removableCalcStmts.Add((CalcStmt) calcWrap.Removable);
                         continue;
                     }
-                    var calcResults = RemoveFromCalc((CalcStmt)calcWrap.Removable);
+                    var calcResults = RemoveFromCalc((CalcStmt) calcWrap.Removable);
                     removableLines.AddRange(calcResults.Item1);
                     removableHints.AddRange(calcResults.Item2);
                     removableOps.AddRange(calcResults.Item3);
@@ -603,7 +604,7 @@ namespace shorty
                     i--; //We have to go back one as a line has been removed all following ones will be moved back aswell
                     removableLines.Add(line);
                     removableOps.Add(stepOp);
-                    if(hint.Body.Count > 0) //Don't need to return hints that are already "invisible"
+                    if (hint.Body.Count > 0) //Don't need to return hints that are already "invisible"
                         removableHints.Add(hint);
                     break;
                 }
@@ -611,7 +612,7 @@ namespace shorty
 
             //find other hints that can be removed
             foreach (var hint in hints) {
-                if(hint.Body.Count == 0) continue;
+                if (hint.Body.Count == 0) continue;
                 List<Statement> body = new List<Statement>();
                 CloneTo(hint.Body, body);
                 //emptyTheBody - have to do it this way as it is readonly
@@ -640,7 +641,6 @@ namespace shorty
             foreach (var item in listToClone) {
                 listToCloneInto.Add(item);
             }
-
         }
 
         public bool TryRemove(Wrap<Expression> line, Wrap<BlockStmt> hint, Wrap<CalcStmt.CalcOp> op)
@@ -760,7 +760,7 @@ namespace shorty
             while (!finished) {
                 finished = true;
                 foreach (var method in memberWrapDictionary.Keys) {
-                    if(memberWrapDictionary[method].Count <= index) continue;
+                    if (memberWrapDictionary[method].Count <= index) continue;
                     similRemover.LastRemovedItem.Add(method, RemoveOne(memberWrapDictionary[method][index]));
                     finished = false;
                 }
@@ -774,7 +774,7 @@ namespace shorty
             return removableWraps;
         }
 
-        private Tuple<Wrap<T>,int> RemoveOne<T>(Wrap<T> wrap)
+        private Tuple<Wrap<T>, int> RemoveOne<T>(Wrap<T> wrap)
         {
             int position = wrap.ParentList.IndexOf(wrap.Removable);
             wrap.ParentList.Remove(wrap.Removable);
@@ -865,8 +865,7 @@ namespace shorty
 
             var index = parent.IndexOf(item);
             parent.Remove(item);
-            if (!_verifier.IsProgramValid(_program))
-            {
+            if (!_verifier.IsProgramValid(_program)) {
                 return SimplifyItem(wrap, index);
             }
             Console.WriteLine("Whole assert can be completely removed separately"); //TODO figure out what to do here (remove from _removableItems?)
@@ -876,13 +875,11 @@ namespace shorty
         private Expression GetExpr<T>(T removable)
         {
             var assert = removable as AssertStmt;
-            if (assert != null)
-            {
+            if (assert != null) {
                 return assert.Expr;
             }
             var invariant = removable as MaybeFreeExpression;
-            if (invariant != null)
-            {
+            if (invariant != null) {
                 return invariant.E;
             }
             return null;
@@ -891,14 +888,12 @@ namespace shorty
         private T GetNewNodeFromItem<T>(T brokenItem, BinaryExpr binExpr)
         {
             var assert = brokenItem as AssertStmt;
-            if (assert != null)
-            {
-                return (T)(object)new AssertStmt(assert.Tok, assert.EndTok, binExpr, assert.Attributes);
+            if (assert != null) {
+                return (T) (object) new AssertStmt(assert.Tok, assert.EndTok, binExpr, assert.Attributes);
             }
             var invariant = brokenItem as MaybeFreeExpression;
-            if (invariant != null)
-            {
-                return (T)(object)new MaybeFreeExpression(binExpr);
+            if (invariant != null) {
+                return (T) (object) new MaybeFreeExpression(binExpr);
             }
             return default(T);
         }
@@ -906,14 +901,12 @@ namespace shorty
         private T GetNewNodeFromExpr<T>(T brokenItem, BinaryExpr binExpr, Expression subExpr)
         {
             var assert = brokenItem as AssertStmt;
-            if (assert != null)
-            {
-                return (T)(object)new AssertStmt(binExpr.tok, assert.EndTok, subExpr, assert.Attributes);
+            if (assert != null) {
+                return (T) (object) new AssertStmt(binExpr.tok, assert.EndTok, subExpr, assert.Attributes);
             }
             var invariant = brokenItem as MaybeFreeExpression;
-            if (invariant != null)
-            {
-                return (T)(object)new MaybeFreeExpression(binExpr);
+            if (invariant != null) {
+                return (T) (object) new MaybeFreeExpression(binExpr);
             }
             return default(T);
         }
@@ -923,8 +916,7 @@ namespace shorty
             var brokenItems = BreakAndReinsertItem(wrap, index);
             brokenItems.Reverse();
             //Test to see which can be removed
-            for (var assertNum = brokenItems.Count - 1; assertNum >= 0; assertNum--)
-            {
+            for (var assertNum = brokenItems.Count - 1; assertNum >= 0; assertNum--) {
                 var brokenItem = brokenItems[assertNum];
                 if (!_remover.TryRemove(wrap)) continue;
                 brokenItems.Remove(brokenItem);
@@ -935,8 +927,7 @@ namespace shorty
         private List<T> BreakAndReinsertItem<T>(Wrap<T> wrap, int index)
         {
             var brokenAsserts = BreakDownExpr(wrap.Removable);
-            foreach (var brokenAssert in brokenAsserts)
-            {
+            foreach (var brokenAssert in brokenAsserts) {
                 wrap.ParentList.Insert(index, brokenAssert);
             }
             return brokenAsserts;
@@ -962,8 +953,7 @@ namespace shorty
         {
             var brokenItems = new List<T>();
             var binaryExpr = GetExpr(item) as BinaryExpr;
-            if (binaryExpr == null || binaryExpr.Op != BinaryExpr.Opcode.And)
-            {
+            if (binaryExpr == null || binaryExpr.Op != BinaryExpr.Opcode.And) {
                 brokenItems.Add(item);
                 return brokenItems;
             }
@@ -973,6 +963,5 @@ namespace shorty
             brokenItems.AddRange(BreakDownExpr(newItem2));
             return brokenItems;
         }
-
     }
 }

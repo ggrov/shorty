@@ -115,9 +115,9 @@ namespace shorty
             Shorty shorty = new Shorty(program, new OneAtATimeRemover(program));
 
             var removedCalcs = shorty.FindRemovableCalcs();
-            using (TextWriter writer = File.CreateText("H:\\dafny\\test-" + program.FullName)) {
-                shorty.PrintProgram(writer);
-            }
+//            using (TextWriter writer = File.CreateText("H:\\dafny\\test-" + program.FullName)) {
+//                shorty.PrintProgram(writer);
+//            }
             Assert.AreEqual(3, removedCalcs.Item1.Count);
             Assert.AreEqual(1, removedCalcs.Item2.Count);
             Assert.AreEqual(1, removedCalcs.Item4.Count);
