@@ -718,7 +718,7 @@ namespace shorty
         }
     }
 
-    internal class SimiltaneousMethodRemover : IRemover
+    internal class SimultaneousMethodRemover : IRemover
     {
         // Goes though each method, removes one thing then verifies and reinserts from the error messages
         private readonly Program _program;
@@ -746,7 +746,7 @@ namespace shorty
             }
         }
 
-        public SimiltaneousMethodRemover(Program program)
+        public SimultaneousMethodRemover(Program program)
         {
             _program = program;
         }
