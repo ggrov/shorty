@@ -153,6 +153,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="RemovableTypeFinder.cs" />
+    <Compile Include="RemovalOrderTester.cs" />
+    <Compile Include="Removers.cs" />
     <Compile Include="Tests.cs">
       <CopyToOutputDirectory>Always</CopyToOutputDirectory>
     </Compile>
