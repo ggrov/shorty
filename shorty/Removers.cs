@@ -17,7 +17,7 @@ namespace shorty
         {
             var cloner = new Cloner();
             var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
-            return new Program(program.FullName, moduleDecl, program.BuiltIns, new ConsoleErrorReporter());
+            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReproter());
         }
 
         public bool IsProgramValid(Program program)
@@ -27,10 +27,11 @@ namespace shorty
 
         public bool IsProgramValid(Program program, Microsoft.Boogie.ErrorReporterDelegate errorDelegate)
         {
-            try {
+            
+            try{
                 var programId = "main_program_id";
                 var stats = new Microsoft.Boogie.PipelineStatistics();
-                var translator = new Translator(new ConsoleErrorReporter());
+                var translator = new Translator(new InvisibleErrorReproter());
                 var programCopy = CloneProgram(program);
                 var resolver = new Resolver(programCopy);
                 resolver.ResolveProgram(programCopy);
@@ -48,13 +49,12 @@ namespace shorty
                 Microsoft.Boogie.ExecutionEngine.Inline(boogieProgram);
 
                 oc = Microsoft.Boogie.ExecutionEngine.InferAndVerify(boogieProgram, stats, programId, errorDelegate);
-
                 var allOk = stats.ErrorCount == 0 && stats.InconclusiveCount == 0 && stats.TimeoutCount == 0 && stats.OutOfMemoryCount == 0;
-                Console.WriteLine(allOk ? "Verification Successful" : "Verification failed");
+                //Console.WriteLine(allOk ? "Verification Successful" : "Verification failed");
                 return oc == Microsoft.Boogie.PipelineOutcome.VerificationCompleted && allOk;
             }
             catch (Exception e) {
-                Console.WriteLine("Verification failed: " + e.Message);
+                //Console.WriteLine("Verification failed: " + e.Message);
                 return false;
             }
         }

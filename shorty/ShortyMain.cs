@@ -15,13 +15,11 @@ namespace shorty
 {
     class ShortyMain
     {
-        static Bpl.OutputPrinter printer;
-
         public static void RunLogger(List<Program> programs)
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
 //            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
-                Logger logger = new Logger(writer, programs, 1);
+                Logger logger = new Logger(writer, programs, 3);
                 logger.LogAllData();
             }
         }
@@ -61,18 +59,29 @@ namespace shorty
             }
         }
 
+        public static void ContractFailureHandler(Object obj, ContractFailedEventArgs args)
+        {
+            throw new ContractFailedException();
+        }
+
         private static void Main(string[] args)
         {
             Contract.Requires(args != null);
             //Setup environment
             DafnyOptions.Install(new DafnyOptions());
+            Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
 //            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
-            Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
+            DafnyOptions.O.ApplyDefaultOptions();
+            Bpl.CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
-            printer = new Bpl.ConsolePrinter();
-            //printer.
-            Bpl.ExecutionEngine.printer = printer;
+            Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
+            ErrorReporter reporter = new InvisibleErrorReproter();
+            Bpl.ExecutionEngine.printer = new InvisibleConsolePrinter();
+            Contract.ContractFailed += ContractFailureHandler;
+            
+
+            
 
             //string[ filename = new string[args.Length];
             List<Program> dafnyPrograms = new List<Program>();
@@ -111,9 +120,9 @@ namespace shorty
 
                 ModuleDecl module = new LiteralModuleDecl(new DefaultModuleDecl(), null);
                 var builtIns = new BuiltIns();
-                Parser.Parse(fileName, module, builtIns, new Errors(new ConsoleErrorReporter()));
+                Parser.Parse(fileName, module, builtIns, new Errors(reporter));
 
-                dafnyPrograms.Add(new Microsoft.Dafny.Program(programName, module, builtIns, new ConsoleErrorReporter()));
+                dafnyPrograms.Add(new Microsoft.Dafny.Program(programName, module, builtIns, reporter));
             }
 
             Console.WriteLine("1: standard run\n2: run logger\n3: run order testing\n");
@@ -283,6 +292,33 @@ namespace shorty
                 Console.Write(program.FullName + " | ");
             }
             Console.Read();
+        }
+    }
+
+    class InvisibleConsolePrinter : Bpl.ConsolePrinter
+    {
+        public override void ReportBplError(Bpl.IToken tok, string message, bool error, TextWriter tw, string category = null)
+        {
+            //tw.WriteLine("Error");
+        }
+
+        public void WriteErrorInformation(Bpl.ErrorInformation errorInfo, TextWriter tw, bool skipExecutionTrace = true){
+            //do nothing...
+        }
+    }
+
+    class ContractFailedException : Exception
+    {
+        public ContractFailedException() {}
+        public ContractFailedException(string message) : base(message) {}
+    }
+
+    class InvisibleErrorReproter : ConsoleErrorReporter
+    {
+        public override bool Message(MessageSource source, ErrorLevel level, Bpl.IToken tok, string msg)
+        {
+            //return base.Message(source, level, tok, msg);
+            return false;
         }
     }
 }
