@@ -19,7 +19,7 @@ namespace shorty
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
 //            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
-                Logger logger = new Logger(writer, programs, 3);
+                Logger logger = new Logger(writer, programs, 1, false);
                 logger.LogAllData();
             }
         }
@@ -165,6 +165,7 @@ namespace shorty
                 sw.Reset();
                 sw.Start();
                 var shorty = new Shorty(program);
+
 //                shorty.PrintAsserts();
                 Console.WriteLine(program.FullName);
                 if (!shorty.IsProgramValid()) {

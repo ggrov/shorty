@@ -167,6 +167,12 @@ namespace shorty
             return Wrap<MaybeFreeExpression>.GetRemovables(removableInvariants);
         }
 
+        public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> GetSimplifiedInvariants()
+        {
+            Simplifier simplifier = new Simplifier(Program);
+            return simplifier.GetSimplifiedItems(_allRemovableTypes.Invariants);
+        }
+
         #endregion
 
         #region Asserts

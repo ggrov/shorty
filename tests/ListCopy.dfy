@@ -29,8 +29,7 @@ class Node {
 
       while (oldListPtr != null)
         invariant newRoot in newRegion;
-        invariant (forall o: Node :: o in newRegion ==> o != null);
-        invariant (forall o: Node :: o in newRegion && o.nxt != null ==> o.nxt in newRegion);
+        invariant (forall o: Node :: o in newRegion ==> o != null) && (forall o: Node :: o in newRegion && o.nxt != null ==> o.nxt in newRegion);
         invariant prev in newRegion;
         invariant fresh(newRegion);
         invariant newRegion !! existingRegion;

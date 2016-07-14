@@ -21,7 +21,8 @@ namespace shorty
 //            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
-            Bpl.OutputPrinter printer = new Bpl.ConsolePrinter();
+            Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
+            Bpl.OutputPrinter printer = new InvisibleConsolePrinter();
             Bpl.ExecutionEngine.printer = printer;
         }
         private Program GetProgram(string fileName)
@@ -63,8 +64,8 @@ namespace shorty
             Shorty shorty = new Shorty(program, new SimultaneousMethodRemover(program));
 
             Assert.AreEqual(6, shorty.Invariants.Count);
-            Assert.AreEqual(2, shorty.FindRemovableInvariants().Count);
-            Assert.AreEqual(4, shorty.Invariants.Count);
+            Assert.AreEqual(1, shorty.FindRemovableInvariants().Count);
+            Assert.AreEqual(5, shorty.Invariants.Count);
             Assert.True(shorty.IsProgramValid());
         }
 
@@ -104,7 +105,21 @@ namespace shorty
             List<Tuple<Statement, Statement>> simplifiedAsserts = shorty.GetSimplifiedAsserts();
             Assert.AreEqual(1, simplifiedAsserts.Count);
             Assert.True(shorty.IsProgramValid());
+            AssertStmt assert = (AssertStmt)simplifiedAsserts[0].Item2;
+            Assert.True(assert.Expr is ForallExpr);
             //TODO looking into the assertStmt to make sure it actually broke down
+        }
+
+        [Test]
+        public void SimplifyInvariants()
+        {
+            Initialise();
+            Program program = GetProgram("ListCopy.dfy");
+            Shorty shorty = new Shorty(program, new SimultaneousMethodRemover(program));
+
+            var simplifiedInvariants = shorty.GetSimplifiedInvariants();
+            Assert.AreEqual(1, simplifiedInvariants.Count);
+            Assert.True(shorty.IsProgramValid());
         }
 
         [Test]
