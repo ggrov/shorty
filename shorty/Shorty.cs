@@ -13,6 +13,8 @@ using Type = System.Type;
 
 namespace shorty
 {
+    class NotValidException : Exception {}
+
     internal class Shorty
     {
         public Program Program { get; private set; }
@@ -52,7 +54,7 @@ namespace shorty
             Contract.Requires(program != null);
             Program = program;
             if (!IsProgramValid()) {
-                throw new Exception("Initial program is not valid");
+                throw new NotValidException();
             }
             var removalTypeFinder = new RemovableTypeFinder(program);
             _allRemovableTypes = removalTypeFinder.FindRemovables();
@@ -64,7 +66,7 @@ namespace shorty
             Contract.Requires(program != null);
             Program = program;
             if (!IsProgramValid())
-                throw new Exception("Initial program is not valid");
+                throw new NotValidException();
             var removalTypeFinder = new RemovableTypeFinder(program);
             _allRemovableTypes = removalTypeFinder.FindRemovables();
             Remover = new OneAtATimeRemover(program);
@@ -170,7 +172,21 @@ namespace shorty
         public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> GetSimplifiedInvariants()
         {
             Simplifier simplifier = new Simplifier(Program);
-            return simplifier.GetSimplifiedItems(_allRemovableTypes.Invariants);
+            var wrappedInvariants = simplifier.GetSimplifiedItems(_allRemovableTypes.Invariants);
+            var invariants = new List<Tuple<MaybeFreeExpression, MaybeFreeExpression>>();
+            foreach (var wrappedInvariant in wrappedInvariants) {
+                _allRemovableTypes.AddInvariant(wrappedInvariant.Item2, _allRemovableTypes.FindMemberFromInvariantWrap(wrappedInvariant.Item1));
+                _allRemovableTypes.RemoveInvariant(wrappedInvariant.Item1);
+                invariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>(wrappedInvariant.Item1.Removable, wrappedInvariant.Item2.Removable));
+            }
+            return invariants;
+        }
+
+
+        public Dictionary<Method, List<List<MaybeFreeExpression>>> TestDifferentInvariantRemovals()
+        {
+            RemovalOrderTester<MaybeFreeExpression> removalOrderTester = new RemovalOrderTester<MaybeFreeExpression>(_allRemovableTypes.GetInvariantDictionary(), Program);
+            return removalOrderTester.TestDifferentRemovals();
         }
 
         #endregion
@@ -184,7 +200,14 @@ namespace shorty
         public List<Tuple<Statement, Statement>> GetSimplifiedAsserts()
         {
             Simplifier simplifier = new Simplifier(Program);
-            return simplifier.GetSimplifiedItems(_allRemovableTypes.Asserts);
+            var wrappedAsserts = simplifier.GetSimplifiedItems(_allRemovableTypes.Asserts);
+            var asserts = new List<Tuple<Statement, Statement>>();
+            foreach (var assert in wrappedAsserts) {
+                _allRemovableTypes.AddAssert(assert.Item2, _allRemovableTypes.FindMemberFromAssertWrap(assert.Item1));
+                _allRemovableTypes.RemoveAssert(assert.Item1);
+                asserts.Add(new Tuple<Statement, Statement>(assert.Item1.Removable, assert.Item2.Removable));
+            }
+            return asserts;
         }
 
         public Dictionary<Method, List<List<Statement>>> TestDifferentAssertRemovals()
@@ -233,10 +256,8 @@ namespace shorty
     {
         public readonly Dictionary<MemberDecl, RemovableTypesInMember> RemovableTypesInMethods = new Dictionary<MemberDecl, RemovableTypesInMember>();
 
-        public ReadOnlyCollection<Wrap<Statement>> Asserts
-        {
-            get
-            {
+        public ReadOnlyCollection<Wrap<Statement>> Asserts {
+            get {
                 var asserts = new List<Wrap<Statement>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
                     asserts.AddRange(removableTypes.Asserts);
@@ -244,10 +265,8 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<Wrap<MaybeFreeExpression>> Invariants
-        {
-            get
-            {
+        public ReadOnlyCollection<Wrap<MaybeFreeExpression>> Invariants {
+            get {
                 var invariants = new List<Wrap<MaybeFreeExpression>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
                     invariants.AddRange(removableTypes.Invariants);
@@ -255,10 +274,8 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<Wrap<Expression>> Decreases
-        {
-            get
-            {
+        public ReadOnlyCollection<Wrap<Expression>> Decreases {
+            get {
                 var decreases = new List<Wrap<Expression>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
                     decreases.AddRange(removableTypes.Decreases);
@@ -266,10 +283,8 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<WildCardDecreases> WildCardDecreaseses
-        {
-            get
-            {
+        public ReadOnlyCollection<WildCardDecreases> WildCardDecreaseses {
+            get {
                 var wildCardDecreases = new List<WildCardDecreases>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
                     wildCardDecreases.AddRange(removableTypes.WildCardDecreaseses);
@@ -277,10 +292,8 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<Wrap<Statement>> LemmaCalls
-        {
-            get
-            {
+        public ReadOnlyCollection<Wrap<Statement>> LemmaCalls {
+            get {
                 var lemmaCalls = new List<Wrap<Statement>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
                     lemmaCalls.AddRange(removableTypes.LemmaCalls);
@@ -288,10 +301,8 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<Wrap<Statement>> Calcs
-        {
-            get
-            {
+        public ReadOnlyCollection<Wrap<Statement>> Calcs {
+            get {
                 var calcs = new List<Wrap<Statement>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
                     calcs.AddRange(removableTypes.Calcs);
@@ -349,8 +360,7 @@ namespace shorty
 
         public void RemoveAssert(Wrap<Statement> assertWrap)
         {
-            foreach (var removableTypesInMethods in RemovableTypesInMethods)
-            {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods) {
                 if (!removableTypesInMethods.Value.Asserts.Contains(assertWrap)) continue;
                 removableTypesInMethods.Value.Asserts.Remove(assertWrap);
                 return;
@@ -359,8 +369,7 @@ namespace shorty
 
         public void RemoveInvariant(Wrap<MaybeFreeExpression> invariantWrap)
         {
-            foreach (var removableTypesInMethods in RemovableTypesInMethods)
-            {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods) {
                 if (!removableTypesInMethods.Value.Invariants.Contains(invariantWrap)) continue;
                 removableTypesInMethods.Value.Invariants.Remove(invariantWrap);
                 return;
@@ -369,8 +378,7 @@ namespace shorty
 
         public void RemoveDecreases(Wrap<Expression> decreasesWrap)
         {
-            foreach (var removableTypesInMethods in RemovableTypesInMethods)
-            {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods) {
                 if (!removableTypesInMethods.Value.Decreases.Contains(decreasesWrap)) continue;
                 removableTypesInMethods.Value.Decreases.Remove(decreasesWrap);
                 return;
@@ -379,8 +387,7 @@ namespace shorty
 
         public void RemoveWildCardDecreases(WildCardDecreases wildCardDecreases)
         {
-            foreach (var removableTypesInMethods in RemovableTypesInMethods)
-            {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods) {
                 if (!removableTypesInMethods.Value.WildCardDecreaseses.Contains(wildCardDecreases)) continue;
                 removableTypesInMethods.Value.WildCardDecreaseses.Remove(wildCardDecreases);
                 return;
@@ -389,8 +396,7 @@ namespace shorty
 
         public void RemoveLemmaCall(Wrap<Statement> lemmaCall)
         {
-            foreach (var removableTypesInMethods in RemovableTypesInMethods)
-            {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods) {
                 if (!removableTypesInMethods.Value.LemmaCalls.Contains(lemmaCall)) continue;
                 removableTypesInMethods.Value.LemmaCalls.Remove(lemmaCall);
                 return;
@@ -399,8 +405,7 @@ namespace shorty
 
         public void RemoveCalc(Wrap<Statement> calc)
         {
-            foreach (var removableTypesInMethods in RemovableTypesInMethods)
-            {
+            foreach (var removableTypesInMethods in RemovableTypesInMethods) {
                 if (!removableTypesInMethods.Value.Calcs.Contains(calc)) continue;
                 removableTypesInMethods.Value.Calcs.Remove(calc);
                 return;
@@ -414,8 +419,7 @@ namespace shorty
         public Dictionary<MemberDecl, List<Wrap<Statement>>> GetAssertDictionary()
         {
             var dictionary = new Dictionary<MemberDecl, List<Wrap<Statement>>>();
-            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values)
-            {
+            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
                 dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.Asserts);
             }
             return dictionary;
@@ -424,8 +428,7 @@ namespace shorty
         public Dictionary<MemberDecl, List<Wrap<MaybeFreeExpression>>> GetInvariantDictionary()
         {
             var dictionary = new Dictionary<MemberDecl, List<Wrap<MaybeFreeExpression>>>();
-            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values)
-            {
+            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
                 dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.Invariants);
             }
             return dictionary;
@@ -434,8 +437,7 @@ namespace shorty
         public Dictionary<MemberDecl, List<Wrap<Expression>>> GetDecreasesDictionary()
         {
             var dictionary = new Dictionary<MemberDecl, List<Wrap<Expression>>>();
-            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values)
-            {
+            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
                 dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.Decreases);
             }
             return dictionary;
@@ -444,8 +446,7 @@ namespace shorty
         public Dictionary<MemberDecl, List<Wrap<Statement>>> GetLemmaCallDictionary()
         {
             var dictionary = new Dictionary<MemberDecl, List<Wrap<Statement>>>();
-            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values)
-            {
+            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
                 dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.LemmaCalls);
             }
             return dictionary;
@@ -454,13 +455,32 @@ namespace shorty
         public Dictionary<MemberDecl, List<Wrap<Statement>>> GetCalcDictionary()
         {
             var dictionary = new Dictionary<MemberDecl, List<Wrap<Statement>>>();
-            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values)
-            {
+            foreach (var removableTypesInMethod in RemovableTypesInMethods.Values) {
                 dictionary.Add(removableTypesInMethod.Member, removableTypesInMethod.Calcs);
             }
             return dictionary;
         }
 
         #endregion
+
+        public MemberDecl FindMemberFromAssertWrap(Wrap<Statement> wrap)
+        {
+            var dict = GetAssertDictionary();
+            foreach (var member in dict.Keys) {
+                if (dict[member].Contains(wrap))
+                    return member;
+            }
+            return null;
+        }
+
+        public MemberDecl FindMemberFromInvariantWrap(Wrap<MaybeFreeExpression> wrap)
+        {
+            var dict = GetInvariantDictionary();
+            foreach (var member in dict.Keys) {
+                if (dict[member].Contains(wrap))
+                    return member;
+            }
+            return null;
+        }
     }
 }

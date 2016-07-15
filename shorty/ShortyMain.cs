@@ -29,34 +29,57 @@ namespace shorty
             using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
 //            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\results.txt")) {
                 bool betterSolutionFound = false;
+                int programNumber = 1;
                 foreach (var program in programs) {
+                    Console.WriteLine("Testing {0} | {1}/{2}", program.Name, programNumber++, programs.Count);
+                    writer.WriteLine(); writer.WriteLine(program.Name); writer.WriteLine();
+
                     try {
                         Shorty shorty = new Shorty(program);
-                        Dictionary<Method, List<List<Statement>>> solutions = shorty.TestDifferentAssertRemovals();
+                        Dictionary<Method, List<List<Statement>>> assertSolutions = shorty.TestDifferentAssertRemovals();
+                        Dictionary<Method, List<List<MaybeFreeExpression>>> invariantSolutions = shorty.TestDifferentInvariantRemovals();
 
-                        foreach (Method method in solutions.Keys) {
-                            int i = 0;
-                            int firstValue = solutions[method][i].Count;
-                            writer.WriteLine("Method: " + method.Name);
-                            foreach (var asserts in solutions[method]) {
-                                writer.Write("Solution " + ++i + " | length " + asserts.Count);
-                                if (asserts.Count >= firstValue && i > 1) {
-                                    writer.WriteLine(" | BETTER OR SAME AS FIRST!!!!!!!!!");
-                                    betterSolutionFound = true;
-                                }
-                                else {
-                                    writer.WriteLine();
-                                }
-                            }
-                        }
+                        writer.WriteLine("ASSERTS for " + program.Name);
+                        writer.WriteLine();
 
+                        betterSolutionFound = PrintResults(assertSolutions, writer, betterSolutionFound);
+
+                        writer.WriteLine();
+                        writer.WriteLine("INVARIANTS for " + program.Name);
+                        writer.WriteLine();
+
+                        betterSolutionFound = PrintResults(invariantSolutions, writer, betterSolutionFound) || betterSolutionFound;
+                    }
+                    catch (NotValidException e) {
+                        writer.WriteLine("Program " + program.Name + "was not valid");
                     }
                     catch {
-                        // ignored
+                        //ignore
                     }
                 }
-                writer.WriteLine(betterSolutionFound ? "A better solution was found!" : "No better solution was found");
+                writer.WriteLine(betterSolutionFound ? "\nA better solution was found!" : "\nNo better solution was found");
             }
+        }
+
+        private static bool PrintResults<T>(Dictionary<Method, List<List<T>>> solutions, TextWriter writer, bool betterSolutionFound)
+        {
+            foreach (Method method in solutions.Keys) {
+                int i = 0;
+                int firstValue = solutions[method][i].Count;
+                if(firstValue==0) continue;
+                writer.WriteLine("Method: " + method.Name + " | Initial value: " + firstValue);
+                foreach (var asserts in solutions[method]) {
+                    if (i++ == 0) continue;
+                    writer.Write("Solution " + i++ + " | length " + asserts.Count);
+                    if (asserts.Count >= firstValue && i > 1) {
+                        writer.WriteLine(" | BETTER OR SAME AS FIRST! ({0} >= {1})", asserts.Count, firstValue);
+                        betterSolutionFound = true;
+                    }
+                    else
+                        writer.WriteLine();
+                }
+            }
+            return betterSolutionFound;
         }
 
         public static void ContractFailureHandler(Object obj, ContractFailedEventArgs args)

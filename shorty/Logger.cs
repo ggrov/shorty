@@ -79,7 +79,7 @@ namespace shorty
         private void WriteHeadings(string heading, string thing)
         {
             _tw.WriteLine("\n" + heading);
-            _tw.Write("Program Name, {0} Before, {0} After, Asserts {0}, Removal Percentage", thing);
+            _tw.Write("Program Name, {0} Before, {0} After, {0} Removed, Removal Percentage", thing);
             if (_runTimeTests)
                 _tw.WriteLine(", Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
             else
@@ -228,17 +228,15 @@ namespace shorty
                 var after = tuple.Item3;
                 var removed = before - after;
                 var percentage = 100f - ((float) after/(float) before)*100f;
+                totalBefore += before;
+                totalRemoved += removed;
+                totalAfter += after;
                 if (_runTimeTests) {
                     var executionTime = tuple.Item4;
                     var verTimeBefore = tuple.Item5;
                     var verTimeAfter = tuple.Item6;
                     var verTimeImprovement = verTimeBefore - verTimeAfter;
-
                     _tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}", name, before, after, removed, percentage + "%", executionTime, verTimeBefore, verTimeAfter, verTimeImprovement);
-
-                    totalBefore += before;
-                    totalRemoved += removed;
-                    totalAfter += after;
                     totalTime += executionTime;
                     totalVerTimeBefore += verTimeBefore;
                     totalVerTimeAfter += verTimeAfter;

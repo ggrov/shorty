@@ -358,9 +358,9 @@ namespace shorty
             _remover = new OneAtATimeRemover(program);
         }
 
-        public List<Tuple<T, T>> GetSimplifiedItems<T>(IEnumerable<Wrap<T>> itemWraps)
+        public List<Tuple<Wrap<T>, Wrap<T>>> GetSimplifiedItems<T>(IEnumerable<Wrap<T>> itemWraps)
         {
-            var simplifiedItems = new List<Tuple<T, T>>();
+            var simplifiedItems = new List<Tuple<Wrap<T>, Wrap<T>>>();
             foreach (var wrap in itemWraps) {
                 var simplifiedItem = TrySimplifyItem(wrap);
                 if(simplifiedItem==null) continue;
@@ -369,7 +369,7 @@ namespace shorty
             return simplifiedItems;
         }
 
-        public Tuple<T, T> TrySimplifyItem<T>(Wrap<T> wrap)
+        public Tuple<Wrap<T>, Wrap<T>> TrySimplifyItem<T>(Wrap<T> wrap)
         {
             var item = wrap.Removable;
             var parent = wrap.ParentList;
@@ -386,42 +386,41 @@ namespace shorty
             return null;
         }
 
-        private Tuple<T, T> SimplifyItem<T>(Wrap<T> wrap, int index)
+        private Tuple<Wrap<T>, Wrap<T>> SimplifyItem<T>(Wrap<T> wrap, int index)
         {
             var brokenItems = BreakAndReinsertItem(wrap, index);
             //brokenItems.Reverse();
             var itemRemoved = false;
             //Test to see which can be removed
-            //TODO: remove the removable from the wrap? theres some kind of bug going on in here - what returns is ok but the original is not changed somehow
             for (var assertNum = brokenItems.Count - 1; assertNum >= 0; assertNum--) {
                 var brokenItem = brokenItems[assertNum];
-                Wrap<T> brokenWrap = new Wrap<T>(brokenItem, wrap.ParentList);
+                Wrap<T> brokenWrap = new Wrap<T>(brokenItem.Removable, wrap.ParentList);
                 if (!_remover.TryRemove(brokenWrap)) continue;
                 brokenItems.Remove(brokenItem);
                 itemRemoved = true;
             }
-            return itemRemoved ? new Tuple<T, T>(wrap.Removable, CombineItems(brokenItems)) : null;
+            return itemRemoved ? new Tuple<Wrap<T>, Wrap<T>>(wrap, CombineItems(brokenItems)) : null;
         }
 
-        private List<T> BreakAndReinsertItem<T>(Wrap<T> wrap, int index)
+        private List<Wrap<T>> BreakAndReinsertItem<T>(Wrap<T> wrap, int index)
         {
-            var brokenAsserts = BreakDownExpr(wrap.Removable);
+            var brokenAsserts = BreakDownExpr(wrap);
             foreach (var brokenAssert in brokenAsserts) {
-                wrap.ParentList.Insert(index, brokenAssert);
+                brokenAssert.ParentList.Insert(index, brokenAssert.Removable);
             }
             return brokenAsserts;
         }
 
-        private List<T> BreakDownExpr<T>(T item)
+        private List<Wrap<T>> BreakDownExpr<T>(Wrap<T> wrap)
         {
-            var brokenItems = new List<T>();
-            var binaryExpr = GetExpr(item) as BinaryExpr;
+            var brokenItems = new List<Wrap<T>>();
+            var binaryExpr = GetExpr(wrap.Removable) as BinaryExpr;
             if (binaryExpr == null || binaryExpr.Op != BinaryExpr.Opcode.And) {
-                brokenItems.Add(item);
+                brokenItems.Add(wrap);
                 return brokenItems;
             }
-            var newItem1 = GetNewNodeFromExpr(item, binaryExpr, binaryExpr.E0);
-            var newItem2 = GetNewNodeFromExpr(item, binaryExpr, binaryExpr.E1);
+            var newItem1 = GetNewNodeFromExpr(wrap, binaryExpr, binaryExpr.E0);
+            var newItem2 = GetNewNodeFromExpr(wrap, binaryExpr, binaryExpr.E1);
             brokenItems.AddRange(BreakDownExpr(newItem1));
             brokenItems.AddRange(BreakDownExpr(newItem2));
             return brokenItems;
@@ -440,23 +439,23 @@ namespace shorty
             return null;
         }
 
-        private T GetNewNodeFromExpr<T>(T brokenItem, BinaryExpr binExpr, Expression subExpr)
+        private Wrap<T> GetNewNodeFromExpr<T>(Wrap<T> originalWrap, BinaryExpr binExpr, Expression subExpr)
         {
-            var assert = brokenItem as AssertStmt;
+            var assert = originalWrap.Removable as AssertStmt;
             if (assert != null) {
-                return (T) (object) new AssertStmt(binExpr.tok, assert.EndTok, subExpr, assert.Attributes);
+                return new Wrap<T>((T)(object) new AssertStmt(binExpr.tok, assert.EndTok, subExpr, assert.Attributes), originalWrap.ParentList);
             }
-            var invariant = brokenItem as MaybeFreeExpression;
+            var invariant = originalWrap.Removable as MaybeFreeExpression;
             if (invariant != null) {
-                return (T) (object) new MaybeFreeExpression(subExpr);
+                return new Wrap<T>((T) (object) new MaybeFreeExpression(subExpr), originalWrap.ParentList);
             }
-            return default(T);
+            return null;
         }
 
-        private T CombineItems<T>(List<T> brokenItems)
+        private Wrap<T> CombineItems<T>(List<Wrap<T>> brokenItems)
         {
             if (brokenItems.Count < 1)
-                return default(T); //null
+                return null; //null
             if (brokenItems.Count == 1)
                 return brokenItems[0];
 
