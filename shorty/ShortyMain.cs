@@ -19,7 +19,7 @@ namespace shorty
         {
             using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
 //            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
-                Logger logger = new Logger(writer, programs, 1, false);
+                Logger logger = new Logger("H:\\dafny\\experimentResults", programs, 1, false);
                 logger.LogAllData();
             }
         }
@@ -51,7 +51,7 @@ namespace shorty
                         betterSolutionFound = PrintResults(invariantSolutions, writer, betterSolutionFound) || betterSolutionFound;
                     }
                     catch (NotValidException e) {
-                        writer.WriteLine("Program " + program.Name + "was not valid");
+                        writer.WriteLine("Program " + program.Name + "was not valid: "+ e.Message);
                     }
                     catch {
                         //ignore
@@ -326,7 +326,7 @@ namespace shorty
             //tw.WriteLine("Error");
         }
 
-        public void WriteErrorInformation(Bpl.ErrorInformation errorInfo, TextWriter tw, bool skipExecutionTrace = true){
+        public new void WriteErrorInformation(Bpl.ErrorInformation errorInfo, TextWriter tw, bool skipExecutionTrace = true){
             //do nothing...
         }
     }

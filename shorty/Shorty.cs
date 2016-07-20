@@ -15,7 +15,7 @@ namespace shorty
 {
     class NotValidException : Exception {}
 
-    internal class Shorty
+    public class Shorty
     {
         public Program Program { get; private set; }
 

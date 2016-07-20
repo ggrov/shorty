@@ -12,28 +12,21 @@ namespace shorty
 {
     class Logger
     {
-        private readonly TextWriter _tw;
         public readonly List<Program> Programs;
         public readonly List<Program> InvalidPrograms = new List<Program>();
-        private readonly int _numberOfTests = 1;
-        private readonly bool _runTimeTests = true;
+        private readonly int _numberOfTests;
+        private readonly bool _runTimeTests;
+        private readonly string _directory;
 
-        public Logger(TextWriter tw, List<Program> programs, int numberOfTest, bool runTimeTests = true)
+        public Logger(string directory, List<Program> programs, int numberOfTest, bool runTimeTests = true)
         {
             Contract.Requires(numberOfTest > 0);
             if (numberOfTest > 1 && !runTimeTests) {
                 throw new Exception("not running time tests and having more than one testrun - there is literally no reason to ever do this");
             }
+            _directory = directory + "\\";
             _numberOfTests = numberOfTest;
-            _tw = tw;
             _runTimeTests = runTimeTests;
-            Programs = programs;
-            EnsureProgramsVerify();
-        }
-
-        public Logger(TextWriter tw, List<Program> programs)
-        {
-            _tw = tw;
             Programs = programs;
             EnsureProgramsVerify();
         }
@@ -44,7 +37,7 @@ namespace shorty
                 var program = Programs[i];
                 if (EnsureProgramVerifies(program)) continue;
                 InvalidPrograms.Add(program);
-                Console.WriteLine("Program {0} is not valid", program.Name);
+                Console.WriteLine("  => Program {0} is not valid", program.Name);
                 Programs.Remove(program);
             }
         }
@@ -64,9 +57,7 @@ namespace shorty
             Console.WriteLine("Checking " + program.FullName);
             var copy = CloneProgram(program);
             var shorty = new Shorty(copy);
-            if (!shorty.IsProgramValid()) return false;
-            Console.WriteLine("Program {0} is valid", copy.Name);
-            return true;
+            return shorty.IsProgramValid();
         }
 
         private Program CloneProgram(Program program)
@@ -76,144 +67,63 @@ namespace shorty
             return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReproter());
         }
 
-        private void WriteHeadings(string heading, string thing)
+        private void WriteHeadings(TextWriter tw, string thing)
         {
-            _tw.WriteLine("\n" + heading);
-            _tw.Write("Program Name, {0} Before, {0} After, {0} Removed, Removal Percentage", thing);
+            tw.Write("Program Name, {0} Before, {0} After, {0} Removed, Removal Percentage", thing);
             if (_runTimeTests)
-                _tw.WriteLine(", Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
+                tw.WriteLine(", Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
             else
-                _tw.WriteLine();
+                tw.WriteLine();
         }
 
         public void LogAllData()
         {
-            _tw.WriteLine("Logging data for {0} programs", Programs.Count);
-            _tw.WriteLine("\nPrograms that failed initial verification");
-            foreach (var program in InvalidPrograms) {
-                _tw.WriteLine(program.FullName);
-            }
-
-            //Assertions
-            WriteHeadings("Assert removal", "Asserts");
-
-            var assertData = new List<Tuple<string, int, int, float, float, float>>();
-            foreach (var program in Programs) {
-                var logFinder = new AssertLogFinder(program, _numberOfTests, _runTimeTests);
-                try {
-                    Console.WriteLine("Removing asserts from {0}...", program.Name);
-                    assertData.Add(logFinder.GetLogData());
-                }
-                catch (Exception e) {
-                    _tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
-                    Console.WriteLine("Failed to remove asserts from {0}", program.Name);
+            using (TextWriter tw = File.CreateText(_directory + "\\summary.txt")) {
+                tw.WriteLine("Logging data for {0} programs", Programs.Count);
+                if (InvalidPrograms.Count > 0) {
+                    tw.WriteLine("\nThe following programs failed initial verification");
+                    foreach (var program in InvalidPrograms)
+                        tw.WriteLine(program.FullName);
                 }
             }
 
-            LogTupleListData(assertData);
-
-            //Assert simplification
-            WriteHeadings("Assert Simplification", "Assert Subexpressions");
-            var assertSimpData = new List<Tuple<string, int, int, float, float, float>>();
-            foreach (var program in Programs) {
-                var logFinder = new AssertSimpLogFinder(program, _numberOfTests, _runTimeTests);
-                try {
-                    Console.WriteLine("Simplifying asserts in {0}...", program.Name);
-                    assertSimpData.Add(logFinder.GetLogData());
-                }
-                catch (Exception e) {
-                    _tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
-                    Console.WriteLine("Failed to simplify asserts in {0}", program.Name);
-                }
-            }
-
-            LogTupleListData(assertSimpData);
-
-            //Invariants
-            WriteHeadings("Invariant removal", "Invariants");
-            var invariantData = new List<Tuple<string, int, int, float, float, float>>();
-            foreach (var program in Programs) {
-                var logFinder = new InvariantLogFinder(program, _numberOfTests, _runTimeTests);
-                try {
-                    Console.WriteLine("Removing invariants from {0}...", program.Name);
-                    invariantData.Add(logFinder.GetLogData());
-                }
-                catch (Exception e) {
-                    _tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
-                    Console.WriteLine("Failed to remove invariants from {0}", program.Name);
-                }
-            }
-            LogTupleListData(invariantData);
-
-            //Invariant simplification
-            WriteHeadings("Invariant Simplification", "Invariant Subexpressions");
-            var invariantSimpData = new List<Tuple<string, int, int, float, float, float>>();
-            foreach (var program in Programs) {
-                var logFinder = new InvariantSimpLogFinder(program, _numberOfTests, _runTimeTests);
-                try {
-                    Console.WriteLine("Simplifying invariants in {0}...", program.Name);
-                    invariantSimpData.Add(logFinder.GetLogData());
-                }
-                catch (Exception e) {
-                    _tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
-                    Console.WriteLine("Failed to simplify invariants in {0}", program.Name);
-                }
-            }
-
-            LogTupleListData(invariantSimpData);
-
-            //Lemma Call
-            WriteHeadings("Lemma Call Removal", "Lemma Calls");
-            var lemmaCallData = new List<Tuple<string, int, int, float, float, float>>();
-            foreach (var program in Programs) {
-                var logFinder = new LemmaCallLogFinder(program, _numberOfTests, _runTimeTests);
-                try {
-                    Console.WriteLine("Removing lemmaCalls from {0}...", program.Name);
-                    lemmaCallData.Add(logFinder.GetLogData());
-                }
-                catch (Exception e) {
-                    _tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
-                    Console.WriteLine("Failed to remove lemma calls from {0}", program.Name);
-                }
-            }
-            LogTupleListData(lemmaCallData);
-
-
-            //Decreases
-            WriteHeadings("Decreases Removal", "Decreases");
-            var decreasesData = new List<Tuple<string, int, int, float, float, float>>();
-            foreach (var program in Programs) {
-                var logFinder = new DecreasesLogFinder(program, _numberOfTests, _runTimeTests);
-                try {
-                    Console.WriteLine("Removing decreases from {0}...", program.Name);
-                    decreasesData.Add(logFinder.GetLogData());
-                }
-                catch (Exception e) {
-                    _tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
-                    Console.WriteLine("Failed to remove decreases from {0}", program.Name);
-                }
-            }
-            LogTupleListData(decreasesData);
-
-
-            //Calc
-            WriteHeadings("Calc Simplification", "Calc Parts");
-            var calcData = new List<Tuple<string, int, int, float, float, float>>();
-            foreach (var program in Programs) {
-                var logFinder = new CalcLogFinder(program, _numberOfTests, _runTimeTests);
-                try {
-                    Console.WriteLine("Removing calcs from {0}...", program.Name);
-                    calcData.Add(logFinder.GetLogData());
-                }
-                catch (Exception e) {
-                    _tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
-                    Console.WriteLine("Failed to remove calcs from {0}", program.Name);
-                }
-            }
-            LogTupleListData(calcData);
+            LogFile("assert-removal", "Asserts", new AssertLogFinderFactory());
+            LogFile("assert-simplification","Assert Subexpressions", new AssertSimpLogFinderFactory());
+            LogFile("invariant-removal", "Invariants", new InvariantLogFinderFactory());
+            LogFile("invariant-simplification","Invariant Subexpressions", new InvariantSimpLogFinderFactory());
+            LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallLogFinderFactory());
+            LogFile("decreases-removal", "Decreases", new DecreasesLogFinderFactory());
+            LogFile("calc-removal", "Calc Parts", new CalcLogFinderFactory());
         }
 
-        private void LogTupleListData(List<Tuple<string, int, int, float, float, float>> data)
+        private void LogFile(string fileName, string itemsName, ILogFinderFactory logFinderFactory)
+        {
+            string fullFileName = _directory + fileName + ".csv";
+            using (TextWriter tw = File.CreateText(fullFileName))
+            {
+                WriteHeadings(tw, itemsName);
+                int count = 1;
+                var data = new List<Tuple<string, int, int, float, float, float>>();
+                foreach (var program in Programs)
+                {
+                    var logFinder = logFinderFactory.GetLogFinder(program, _numberOfTests, _runTimeTests);
+                    try
+                    {
+                        Console.WriteLine("Removing {3} from {0}: {1}/{2} ", program.Name, count++, Programs.Count, itemsName.ToLower());
+                        data.Add(logFinder.GetLogData());
+                    }
+                    catch (Exception e)
+                    {
+                        tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
+                        Console.WriteLine("  => Failed to remove {2} from {0}: {1}", program.Name, e.Message, itemsName.ToLower());
+                    }
+                }
+
+                LogTupleListData(data, tw);
+            }
+        }
+
+        private void LogTupleListData(List<Tuple<string, int, int, float, float, float>> data, TextWriter tw)
         {
             var totalBefore = 0;
             var totalRemoved = 0;
@@ -236,29 +146,95 @@ namespace shorty
                     var verTimeBefore = tuple.Item5;
                     var verTimeAfter = tuple.Item6;
                     var verTimeImprovement = verTimeBefore - verTimeAfter;
-                    _tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}", name, before, after, removed, percentage + "%", executionTime, verTimeBefore, verTimeAfter, verTimeImprovement);
+                    tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}", name, before, after, removed, percentage + "%", executionTime, verTimeBefore, verTimeAfter, verTimeImprovement);
                     totalTime += executionTime;
                     totalVerTimeBefore += verTimeBefore;
                     totalVerTimeAfter += verTimeAfter;
                 }
                 else
-                    _tw.WriteLine("{0}, {1}, {2}, {3}, {4}", name, before, after, removed, percentage + "%");
+                    tw.WriteLine("{0}, {1}, {2}, {3}, {4}", name, before, after, removed, percentage + "%");
             }
 
             var overAllPercentage = 100f - ((float) totalAfter/(float) totalBefore)*100;
             if (_runTimeTests) {
                 var totalVerTimeImprovement = totalVerTimeBefore - totalVerTimeAfter;
-                _tw.WriteLine("Total, {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%", totalTime, totalVerTimeBefore, totalVerTimeAfter, totalVerTimeImprovement);
-                _tw.WriteLine(",,,,,,,Avg ver Time Improvement:,{0}", totalVerTimeImprovement/Programs.Count);
+                tw.WriteLine("Total, {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%", totalTime, totalVerTimeBefore, totalVerTimeAfter, totalVerTimeImprovement);
+                tw.WriteLine(",,,,,,,Avg ver Time Improvement:,{0}", totalVerTimeImprovement/Programs.Count);
             }
             else
-                _tw.WriteLine("Total, {0}, {1}, {2}, {3}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%");
+                tw.WriteLine("Total, {0}, {1}, {2}, {3}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%");
         }
     }
 
+    #region LogFinder Callers
+
+    public interface ILogFinderFactory
+    {
+        LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests);
+    }
+
+    class AssertLogFinderFactory : ILogFinderFactory
+    {
+        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        {
+            return new AssertLogFinder(program, numberOfTests, runTimeTests);
+        }
+    }
+
+    class AssertSimpLogFinderFactory : ILogFinderFactory
+    {
+        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        {
+            return new AssertSimpLogFinder(program, numberOfTests, runTimeTests);
+        }
+    }
+
+    class InvariantLogFinderFactory : ILogFinderFactory
+    {
+        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        {
+            return new InvariantLogFinder(program, numberOfTests, runTimeTests);
+        }
+    }
+
+    class InvariantSimpLogFinderFactory : ILogFinderFactory
+    {
+        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        {
+            return new InvariantSimpLogFinder(program, numberOfTests, runTimeTests);
+        }
+    }
+
+    class LemmaCallLogFinderFactory: ILogFinderFactory
+    {
+        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        {
+            return new LemmaCallLogFinder(program, numberOfTests, runTimeTests);
+        }
+    }
+
+    class DecreasesLogFinderFactory : ILogFinderFactory
+    {
+        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        {
+            return new DecreasesLogFinder(program, numberOfTests, runTimeTests);
+        }
+    }
+
+    class CalcLogFinderFactory : ILogFinderFactory
+    {
+        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        {
+            return new CalcLogFinder(program, numberOfTests, runTimeTests);
+        }
+    }
+
+
+    #endregion
+
     #region LogFinders
 
-    abstract class LogFinder
+    public abstract class LogFinder
     {
         protected Program Program;
         private readonly int _numberOfTests;

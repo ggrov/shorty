@@ -53,7 +53,7 @@ namespace shorty
                 //Console.WriteLine(allOk ? "Verification Successful" : "Verification failed");
                 return oc == Microsoft.Boogie.PipelineOutcome.VerificationCompleted && allOk;
             }
-            catch (Exception e) {
+            catch /*(Exception e)*/ {
                 //Console.WriteLine("Verification failed: " + e.Message);
                 return false;
             }
@@ -97,7 +97,7 @@ namespace shorty
         }
     }
 
-    internal class WildCardDecreases
+    public class WildCardDecreases
     {
         public readonly Expression Expression;
         public readonly Specification<Expression> ParentSpecification;
@@ -116,7 +116,7 @@ namespace shorty
         }
     }
 
-    class CalcRemover
+    public class CalcRemover
     {
         SimpleVerifier verifier = new SimpleVerifier();
 
@@ -229,7 +229,7 @@ namespace shorty
         }
     }
 
-    internal interface IRemover
+    public interface IRemover
     {
         List<Wrap<T>> Remove<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary);
     }
@@ -375,7 +375,7 @@ namespace shorty
             var parent = wrap.ParentList;
             var binExpr = GetExpr(wrap.Removable) as BinaryExpr;
             if (binExpr != null)
-                if (binExpr.Op != BinaryExpr.Opcode.And) return null;
+                if (binExpr.Op != BinaryExpr.Opcode.And ) return null; //TODO simplify when theres an implies
 
             var index = parent.IndexOf(item);
             parent.Remove(item);
@@ -404,11 +404,11 @@ namespace shorty
 
         private List<Wrap<T>> BreakAndReinsertItem<T>(Wrap<T> wrap, int index)
         {
-            var brokenAsserts = BreakDownExpr(wrap);
-            foreach (var brokenAssert in brokenAsserts) {
+            var brokenItems = BreakDownExpr(wrap);
+            foreach (var brokenAssert in brokenItems) {
                 brokenAssert.ParentList.Insert(index, brokenAssert.Removable);
             }
-            return brokenAsserts;
+            return brokenItems;
         }
 
         private List<Wrap<T>> BreakDownExpr<T>(Wrap<T> wrap)
