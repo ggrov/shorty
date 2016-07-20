@@ -177,6 +177,7 @@ namespace shorty
             foreach (var wrappedInvariant in wrappedInvariants) {
                 _allRemovableTypes.AddInvariant(wrappedInvariant.Item2, _allRemovableTypes.FindMemberFromInvariantWrap(wrappedInvariant.Item1));
                 _allRemovableTypes.RemoveInvariant(wrappedInvariant.Item1);
+                _allRemovableTypes.AddInvariant(wrappedInvariant.Item2, _allRemovableTypes.FindMemberFromInvariantWrap(wrappedInvariant.Item2));
                 invariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>(wrappedInvariant.Item1.Removable, wrappedInvariant.Item2.Removable));
             }
             return invariants;

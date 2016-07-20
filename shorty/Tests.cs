@@ -38,9 +38,9 @@ namespace shorty
 
             ModuleDecl module = new LiteralModuleDecl(new DefaultModuleDecl(), null);
             var builtIns = new BuiltIns();
-            Parser.Parse(dir, module, builtIns, new Errors(new InvisibleErrorReproter()));
+            Parser.Parse(dir, module, builtIns, new Errors(new InvisibleErrorReporter()));
 
-            return new Program(programName, module, builtIns, new InvisibleErrorReproter());
+            return new Program(programName, module, builtIns, new InvisibleErrorReporter());
         }
 
         [Test]

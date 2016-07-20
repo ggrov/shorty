@@ -17,7 +17,7 @@ namespace shorty
         {
             var cloner = new Cloner();
             var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
-            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReproter());
+            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReporter());
         }
 
         public bool IsProgramValid(Program program)
@@ -31,7 +31,7 @@ namespace shorty
             try{
                 var programId = "main_program_id";
                 var stats = new Microsoft.Boogie.PipelineStatistics();
-                var translator = new Translator(new InvisibleErrorReproter());
+                var translator = new Translator(new InvisibleErrorReporter());
                 var programCopy = CloneProgram(program);
                 var resolver = new Resolver(programCopy);
                 resolver.ResolveProgram(programCopy);
@@ -271,7 +271,13 @@ namespace shorty
             if (IsProgramValid(_program)) {
                 return true;
             }
-            parentBody.Insert(index, removable);
+            if (index == -1) {
+                parentBody.Add(removable);
+                if (!IsProgramValid(_program))
+                    throw new Exception("removable could not be added to parent list!");
+            }
+            else
+                parentBody.Insert(index, removable);
             return false;
         }
 
@@ -388,18 +394,45 @@ namespace shorty
 
         private Tuple<Wrap<T>, Wrap<T>> SimplifyItem<T>(Wrap<T> wrap, int index)
         {
-            var brokenItems = BreakAndReinsertItem(wrap, index);
-            //brokenItems.Reverse();
+            var brokenItemWraps = BreakAndReinsertItem(wrap, index);
             var itemRemoved = false;
             //Test to see which can be removed
-            for (var assertNum = brokenItems.Count - 1; assertNum >= 0; assertNum--) {
-                var brokenItem = brokenItems[assertNum];
+            for (var assertNum = brokenItemWraps.Count - 1; assertNum >= 0; assertNum--) {
+                var brokenItem = brokenItemWraps[assertNum];
                 Wrap<T> brokenWrap = new Wrap<T>(brokenItem.Removable, wrap.ParentList);
                 if (!_remover.TryRemove(brokenWrap)) continue;
-                brokenItems.Remove(brokenItem);
+                brokenItemWraps.Remove(brokenItem);
                 itemRemoved = true;
             }
-            return itemRemoved ? new Tuple<Wrap<T>, Wrap<T>>(wrap, CombineItems(brokenItems)) : null;
+
+            //Remove the broken items from their parent
+            foreach (var brokenItem in brokenItemWraps)
+                brokenItem.ParentList.Remove(brokenItem.Removable);
+
+            //If nothing was removed, reinsert the original to its parent
+            if (!itemRemoved) {
+                wrap.ParentList.Insert(index, wrap.Removable);
+                return null;    
+            }
+
+            var brokenItems = new List<T>();
+            foreach (var brokenItemWrap in brokenItemWraps) {
+                brokenItems.Add(brokenItemWrap.Removable);
+            }
+            var newExpr = CombineItems(brokenItems);
+
+            //Create a new item
+            var newItem = GetNewNodeFromItem(wrap.Removable, newExpr);
+            //Wrap the new item
+            var newWrap = new Wrap<T>(newItem, wrap.ParentList);
+            //Actually insert the item
+            newWrap.ParentList.Insert(index, newWrap.Removable);
+
+            //Test quickly
+            var ver = new SimpleVerifier();
+            if(!ver.IsProgramValid(_program)) throw new Exception("Failed to verify after combining items!");
+
+            return new Tuple<Wrap<T>, Wrap<T>>(wrap, newWrap);
         }
 
         private List<Wrap<T>> BreakAndReinsertItem<T>(Wrap<T> wrap, int index)
@@ -421,8 +454,8 @@ namespace shorty
             }
             var newItem1 = GetNewNodeFromExpr(wrap, binaryExpr, binaryExpr.E0);
             var newItem2 = GetNewNodeFromExpr(wrap, binaryExpr, binaryExpr.E1);
-            brokenItems.AddRange(BreakDownExpr(newItem1));
-            brokenItems.AddRange(BreakDownExpr(newItem2));
+            if(newItem1 != null) brokenItems.AddRange(BreakDownExpr(newItem1));
+            if(newItem2 != null) brokenItems.AddRange(BreakDownExpr(newItem2));
             return brokenItems;
         }
 
@@ -452,33 +485,38 @@ namespace shorty
             return null;
         }
 
-        private Wrap<T> CombineItems<T>(List<Wrap<T>> brokenItems)
+        private Expression CombineItems<T>(List<T> brokenItems)
         {
             if (brokenItems.Count < 1)
                 return null; //null
             if (brokenItems.Count == 1)
-                return brokenItems[0];
+                return GetExpr(brokenItems[0]);
 
             var item = brokenItems[0];
             brokenItems.Remove(item);
-            var left = GetExpr(brokenItems[0]);
-            var right = GetExpr(CombineItems(brokenItems));
+            var left = GetExpr(item);
+            var right = CombineItems(brokenItems);
+
+
+
             var binExpr = new BinaryExpr(left.tok, BinaryExpr.Opcode.And, left, right);
-            var newNode = GetNewNodeFromItem(brokenItems[0], binExpr);
-            return newNode;
+            return binExpr;
+
+//            var newNode = GetNewNodeFromItem(brokenItems[0], binExpr);
+//            return new Wrap<T>(newNode, item.ParentList);
         }
 
-        private T GetNewNodeFromItem<T>(T brokenItem, BinaryExpr binExpr)
+        private T GetNewNodeFromItem<T>(T originalItem, Expression expr)
         {
-            var assert = brokenItem as AssertStmt;
+            var assert = originalItem as AssertStmt;
             if (assert != null) {
-                return (T) (object) new AssertStmt(assert.Tok, assert.EndTok, binExpr, assert.Attributes);
+                return (T)(object)new AssertStmt(assert.Tok, assert.EndTok, expr, assert.Attributes);
             }
-            var invariant = brokenItem as MaybeFreeExpression;
+            var invariant = originalItem as MaybeFreeExpression;
             if (invariant != null) {
-                return (T) (object) new MaybeFreeExpression(binExpr);
+                return (T)(object)new MaybeFreeExpression(expr);
             }
-            return default(T);
+            throw new Exception("cant create a node from the item!");
         }
     }
 }

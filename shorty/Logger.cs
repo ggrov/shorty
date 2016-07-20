@@ -64,7 +64,7 @@ namespace shorty
         {
             var cloner = new Cloner();
             var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
-            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReproter());
+            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReporter());
         }
 
         private void WriteHeadings(TextWriter tw, string thing)
@@ -87,13 +87,13 @@ namespace shorty
                 }
             }
 
-            LogFile("assert-removal", "Asserts", new AssertLogFinderFactory());
-            LogFile("assert-simplification","Assert Subexpressions", new AssertSimpLogFinderFactory());
-            LogFile("invariant-removal", "Invariants", new InvariantLogFinderFactory());
+//            LogFile("assert-removal", "Asserts", new AssertLogFinderFactory());
+//            LogFile("assert-simplification","Assert Subexpressions", new AssertSimpLogFinderFactory());
+//            LogFile("invariant-removal", "Invariants", new InvariantLogFinderFactory());
             LogFile("invariant-simplification","Invariant Subexpressions", new InvariantSimpLogFinderFactory());
-            LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallLogFinderFactory());
-            LogFile("decreases-removal", "Decreases", new DecreasesLogFinderFactory());
-            LogFile("calc-removal", "Calc Parts", new CalcLogFinderFactory());
+//            LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallLogFinderFactory());
+//            LogFile("decreases-removal", "Decreases", new DecreasesLogFinderFactory());
+//            LogFile("calc-removal", "Calc Parts", new CalcLogFinderFactory());
         }
 
         private void LogFile(string fileName, string itemsName, ILogFinderFactory logFinderFactory)
@@ -114,7 +114,7 @@ namespace shorty
                     }
                     catch (Exception e)
                     {
-                        tw.WriteLine("{0}, FAILED, {1}", program.Name, e.Message);
+                        tw.WriteLine("{0}, FAILED", program.Name);
                         Console.WriteLine("  => Failed to remove {2} from {0}: {1}", program.Name, e.Message, itemsName.ToLower());
                     }
                 }
@@ -166,7 +166,7 @@ namespace shorty
         }
     }
 
-    #region LogFinder Callers
+    #region LogFinder Factories
 
     public interface ILogFinderFactory
     {
@@ -499,7 +499,7 @@ namespace shorty
         {
             var cloner = new Cloner();
             var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
-            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReproter());
+            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReporter());
         }
     }
 }
