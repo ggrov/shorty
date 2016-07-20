@@ -99,7 +99,7 @@ namespace shorty
             Bpl.CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
-            ErrorReporter reporter = new InvisibleErrorReproter();
+            ErrorReporter reporter = new InvisibleErrorReporter();
             Bpl.ExecutionEngine.printer = new InvisibleConsolePrinter();
             Contract.ContractFailed += ContractFailureHandler;
             
@@ -337,7 +337,7 @@ namespace shorty
         public ContractFailedException(string message) : base(message) {}
     }
 
-    class InvisibleErrorReproter : ConsoleErrorReporter
+    class InvisibleErrorReporter : ConsoleErrorReporter
     {
         public override bool Message(MessageSource source, ErrorLevel level, Bpl.IToken tok, string msg)
         {
