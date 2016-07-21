@@ -17,17 +17,15 @@ namespace shorty
     {
         public static void RunLogger(List<Program> programs)
         {
-            using (TextWriter writer = File.CreateText("H:\\dafny\\test.csv")) {
-//            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\test.csv")) {
-                Logger logger = new Logger("H:\\dafny\\experimentResults", programs, 1, false);
+//                Logger logger = new Logger("H:\\dafny\\experimentResults", programs, 1, false);
+                Logger logger = new Logger("C:\\users\\Duncan\\Documents\\dafny\\experimentResults", programs, 1, false);
                 logger.LogAllData();
-            }
         }
 
         public static void RunTest(List<Program> programs)
         {
-            using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
-//            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\results.txt")) {
+//            using (TextWriter writer = File.CreateText("H:\\dafny\\results.txt")) {
+            using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\results.txt")) {
                 bool betterSolutionFound = false;
                 int programNumber = 1;
                 foreach (var program in programs) {
@@ -93,8 +91,8 @@ namespace shorty
             //Setup environment
             DafnyOptions.Install(new DafnyOptions());
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             DafnyOptions.O.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
@@ -250,8 +248,8 @@ namespace shorty
                 removableLemmaCalls.Add(program, lemmaCalls);
                 sw.Stop();
                 times.Add(program, sw.ElapsedMilliseconds);
-                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\short-" + program.FullName)) {
-//                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
+//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\short-" + program.FullName)) {
+                using (TextWriter writer = File.CreateText("C:\\users\\Duncan\\Documents\\shortied-" + program.FullName)) {
                     shorty.PrintProgram(writer);
                 }
             }

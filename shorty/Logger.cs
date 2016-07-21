@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -421,7 +421,8 @@ namespace shorty
             RemoveAllOfType(shorty); //we do not want theese here - this will take a bit of time but is needed for accurate results
             var initialAmount = CountSubExprsFromItems(shorty);
             Simplify(shorty);
-            var amount = initialAmount - CountSubExprsFromItems(shorty);
+            int after = CountSubExprsFromItems(shorty);
+            var amount = initialAmount - after;
             return amount;
         }
 

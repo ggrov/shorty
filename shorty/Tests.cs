@@ -17,8 +17,8 @@ namespace shorty
         private void Initialise()
         {
             DafnyOptions.Install(new DafnyOptions());
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
@@ -130,9 +130,6 @@ namespace shorty
             Shorty shorty = new Shorty(program, new OneAtATimeRemover(program));
 
             var removedCalcs = shorty.FindRemovableCalcs();
-//            using (TextWriter writer = File.CreateText("H:\\dafny\\test-" + program.FullName)) {
-//                shorty.PrintProgram(writer);
-//            }
             Assert.AreEqual(3, removedCalcs.Item1.Count);
             Assert.AreEqual(1, removedCalcs.Item2.Count);
             Assert.AreEqual(1, removedCalcs.Item4.Count);
