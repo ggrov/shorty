@@ -90,8 +90,8 @@ namespace shorty
 //            LogFile("assert-removal", "Asserts", new AssertLogFinderFactory());
 //            LogFile("assert-simplification","Assert Subexpressions", new AssertSimpLogFinderFactory());
 //            LogFile("invariant-removal", "Invariants", new InvariantLogFinderFactory());
-            LogFile("invariant-simplification","Invariant Subexpressions", new InvariantSimpLogFinderFactory());
-//            LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallLogFinderFactory());
+//            LogFile("invariant-simplification","Invariant Subexpressions", new InvariantSimpLogFinderFactory());
+            LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallLogFinderFactory());
 //            LogFile("decreases-removal", "Decreases", new DecreasesLogFinderFactory());
 //            LogFile("calc-removal", "Calc Parts", new CalcLogFinderFactory());
         }

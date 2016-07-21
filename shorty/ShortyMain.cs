@@ -91,12 +91,13 @@ namespace shorty
             //Setup environment
             DafnyOptions.Install(new DafnyOptions());
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            DafnyOptions.O.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            DafnyOptions.O.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             DafnyOptions.O.ApplyDefaultOptions();
-            Bpl.CommandLineOptions.Clo.RunningBoogieFromCommandLine = true;
-            Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
-            Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
+            DafnyOptions.O.RunningBoogieFromCommandLine = true;
+            DafnyOptions.O.VerifySnapshots = 1;
+            DafnyOptions.O.ErrorTrace = 0;
+            DafnyOptions.O.ProverKillTime = 10;
             ErrorReporter reporter = new InvisibleErrorReporter();
             Bpl.ExecutionEngine.printer = new InvisibleConsolePrinter();
             Contract.ContractFailed += ContractFailureHandler;
