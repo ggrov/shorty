@@ -3,13 +3,8 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.Contracts;
 using System.IO;
-using System.Linq;
-using System.Net;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
-using Type = System.Type;
 
 namespace shorty
 {
