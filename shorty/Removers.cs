@@ -162,7 +162,7 @@ namespace shorty
             // We don't want to touch the last two (dummy and last item)
             for (var i = 1; i < lines.Count - 2; i++) {
                 var line = lines[i];
-                for (int j = 0; j < hints.Count; j++) {
+                for (var j = 0; j < hints.Count; j++) {
                     var hint = hints[j];
                     var stepOp = stepOps[j];
                     if (!TryRemove(new Wrap<Expression>(line, lines), new Wrap<BlockStmt>(hint, hints), new Wrap<CalcStmt.CalcOp>(stepOp, stepOps))) continue;
@@ -178,10 +178,10 @@ namespace shorty
             //find other hints that can be removed
             foreach (var hint in hints) {
                 if (hint.Body.Count == 0) continue;
-                List<Statement> body = new List<Statement>();
+                var body = new List<Statement>();
                 CloneTo(hint.Body, body);
                 //emptyTheBody - have to do it this way as it is readonly
-                for (int i = 0; i < hint.Body.Count; i++) {
+                for (var i = 0; i < hint.Body.Count; i++) {
                     var item = hint.Body[i];
                     hint.Body.Remove(item);
                 }
@@ -297,22 +297,67 @@ namespace shorty
         internal class SimilRemoverStorage<T>
         {
             public Dictionary<MemberDecl, Tuple<Wrap<T>, int>> LastRemovedItem = new Dictionary<MemberDecl, Tuple<Wrap<T>, int>>();
-
+            private List<MemberDecl> _alreadyReAddedMembers = new List<MemberDecl>();
             public void ErrorInformation(Microsoft.Boogie.ErrorInformation errorInfo)
             {
-                MemberDecl member = FindMethod(errorInfo.Tok.pos);
+                MemberDecl member = null;
+                try {
+                    member = FindMethod(errorInfo.Tok.pos);
+                }
+                catch (AlreadyRemovedException e) {
+                    return;
+                }
+                catch (Exception e) {
+                    throw new Exception("Could not find member");
+                }
+
+                if (member == null) return;
                 LastRemovedItem[member].Item1.ParentList.Insert(LastRemovedItem[member].Item2, LastRemovedItem[member].Item1.Removable);
+                _alreadyReAddedMembers.Add(member);
                 LastRemovedItem.Remove(member);
+                
             }
 
             private MemberDecl FindMethod(int pos)
             {
+                
                 foreach (var member in LastRemovedItem.Keys) {
-                    if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos) {
+                    if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos)
                         return member;
+                    if (member.BodyStartTok.pos != 0 || member.BodyEndTok.pos != 0) continue; //Sometimes this bugs out... needs resolved first?
+                    var method = member as Method;
+                    if (method == null) continue;
+                    if (method.Body.Tok.pos <= pos && method.Body.EndTok.pos >= pos)
+                        return member;
+                }
+                //The method could not be found - maybe the removal caused two errors so we already have fixed it? lets be sure
+                foreach (var member in _alreadyReAddedMembers) {
+                    if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos)
+                        throw new AlreadyRemovedException();
+                    if (member.BodyStartTok.pos != 0 || member.BodyEndTok.pos != 0) continue; //Sometimes this bugs out...
+                    var method = member as Method;
+                    if (method != null) {
+                        if (method.Body.Tok.pos <= pos && method.Body.EndTok.pos >= pos)
+                            throw new AlreadyRemovedException();
+                        continue;
                     }
                 }
-                throw new Exception("Could not find method");
+                //still hasn't been found.  Possible we're dealing with a function then
+                //Functions have no end tokens! (assuming the BOdyEndTok thing isn't working for whatever reason
+                //we will look through all the functions and find the one with the highest pos that is less than the errors pos.
+                Function currentFunction = null;
+                foreach (var memberDecl in LastRemovedItem.Keys) {
+                    var function = memberDecl as Function;
+                    if (function == null) continue;
+                    if (function.tok.pos >= pos) continue; //function occurs after our token - no chance this is the one
+                    if (currentFunction == null)
+                        currentFunction = function;
+                    else if (function.tok.pos > currentFunction.tok.pos)
+                        currentFunction = function;
+                }
+                if(currentFunction != null) return currentFunction;
+                //TODO is it possible something could have been removed in a field?
+                throw new Exception("Could not find method"); //TODO:  this won't be caught as it is caught in boogie... will have to set a flag or something
             }
         }
 
@@ -323,34 +368,50 @@ namespace shorty
 
         public List<Wrap<T>> Remove<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary)
         {
-            List<Wrap<T>> removableWraps = new List<Wrap<T>>();
-            bool finished = false;
-            SimilRemoverStorage<T> similRemover = new SimilRemoverStorage<T>();
-            int index = 0;
+            var removableWraps = new List<Wrap<T>>();
+            var index = 0;
+            var similRemover = new SimilRemoverStorage<T>();
+            var finished = false;
             while (!finished) {
-                finished = true;
-                foreach (var method in memberWrapDictionary.Keys) {
-                    if (memberWrapDictionary[method].Count <= index) continue;
-                    similRemover.LastRemovedItem.Add(method, RemoveOne(memberWrapDictionary[method][index]));
-                    finished = false;
-                }
-                index++;
-                _simpleVerifier.IsProgramValid(_program, similRemover.ErrorInformation);
-                foreach (var value in similRemover.LastRemovedItem.Values) {
-                    removableWraps.Add(value.Item1);
-                }
+                finished = RemoveAndTrackItemsForThisRun(memberWrapDictionary, index++, similRemover);
+                RunVerification(similRemover);
+                ReinsertInvalidItems(similRemover, removableWraps);
                 similRemover.LastRemovedItem = new Dictionary<MemberDecl, Tuple<Wrap<T>, int>>();
             }
             return removableWraps;
         }
 
+        private static void ReinsertInvalidItems<T>(SimilRemoverStorage<T> similRemover, List<Wrap<T>> removableWraps)
+        {
+            foreach (var value in similRemover.LastRemovedItem.Values) //re-add all the items 
+                removableWraps.Add(value.Item1);
+        }
+
+        private void RunVerification<T>(SimilRemoverStorage<T> similRemover)
+        {
+            _simpleVerifier.IsProgramValid(_program, similRemover.ErrorInformation);
+        }
+
+        private bool RemoveAndTrackItemsForThisRun<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary, int index, SimilRemoverStorage<T> similRemover)
+        {
+            var finished = true;
+            foreach (var method in memberWrapDictionary.Keys) {
+                if (memberWrapDictionary[method].Count <= index) continue; //All items in this method have been done
+                similRemover.LastRemovedItem.Add(method, RemoveOne(memberWrapDictionary[method][index])); //Track the item
+                finished = false;
+            }
+            return finished;
+        }
+
         private Tuple<Wrap<T>, int> RemoveOne<T>(Wrap<T> wrap)
         {
-            int position = wrap.ParentList.IndexOf(wrap.Removable);
+            var position = wrap.ParentList.IndexOf(wrap.Removable);
             wrap.ParentList.Remove(wrap.Removable);
             return new Tuple<Wrap<T>, int>(wrap, position);
         }
     }
+
+    class AlreadyRemovedException : Exception {}
 
     internal class Simplifier
     {
@@ -399,7 +460,7 @@ namespace shorty
             //Test to see which can be removed
             for (var assertNum = brokenItemWraps.Count - 1; assertNum >= 0; assertNum--) {
                 var brokenItem = brokenItemWraps[assertNum];
-                Wrap<T> brokenWrap = new Wrap<T>(brokenItem.Removable, wrap.ParentList);
+                var brokenWrap = new Wrap<T>(brokenItem.Removable, wrap.ParentList);
                 if (!_remover.TryRemove(brokenWrap)) continue;
                 brokenItemWraps.Remove(brokenItem);
                 itemRemoved = true;

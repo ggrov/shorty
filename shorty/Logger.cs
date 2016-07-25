@@ -94,6 +94,8 @@ namespace shorty
             LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallLogFinderFactory());
             LogFile("decreases-removal", "Decreases", new DecreasesLogFinderFactory());
             LogFile("calc-removal", "Calc Parts", new CalcLogFinderFactory());
+            if(_runTimeTests)
+                LogFile("everything-removal", "", new EverythingLogFinderFactory()); //This will not actually count anything as the information will not be entirely useful (e.g. does a part of an assert count as much as an assert?)
         }
 
         private void LogFile(string fileName, string itemsName, ILogFinderFactory logFinderFactory)
@@ -228,6 +230,13 @@ namespace shorty
             return new CalcLogFinder(program, numberOfTests, runTimeTests);
         }
     }
+    class EverythingLogFinderFactory : ILogFinderFactory
+    {
+        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        {
+            return new EverythingLogFinder(program, numberOfTests, runTimeTests);
+        }
+    }
 
 
     #endregion
@@ -238,7 +247,7 @@ namespace shorty
     {
         protected Program Program;
         private readonly int _numberOfTests;
-        private bool _runTimeTests;
+        private readonly bool _runTimeTests;
 
         protected LogFinder(Program program, int numberOfTests, bool runTimeTest)
         {
@@ -488,6 +497,37 @@ namespace shorty
                 if (invariant == null) continue;
                 amount += CountExpr(invariant.E);
             }
+            return amount;
+        }
+    }
+
+    class EverythingLogFinder : LogFinder
+    {
+        public EverythingLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
+
+        public override int GetRemovedItemsCount(Shorty shorty)
+        {
+            var amount = 0;
+            amount += shorty.FindRemovableAsserts().Count;
+            amount += shorty.FindRemovableInvariants().Count;
+            amount += shorty.FindRemovableDecreases().Count;
+            amount += shorty.FindRemovableLemmaCalls().Count;
+            amount += shorty.FindRemovableCalcs().Item1.Count;
+            amount += shorty.GetSimplifiedAsserts().Count;
+            amount += shorty.GetSimplifiedInvariants().Count;
+//            return amount;
+            return 0;
+
+        }
+
+        public override int GetCount(Shorty shorty)
+        {
+            var amount = 0;
+//            amount += shorty.Asserts.Count;
+//            amount += shorty.Invariants.Count;
+//            amount += shorty.Decreases.Count;
+//            amount += shorty.LemmaCalls.Count;
+//            amount += shorty.Calcs.Count;
             return amount;
         }
     }

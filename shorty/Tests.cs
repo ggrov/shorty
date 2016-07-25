@@ -17,10 +17,11 @@ namespace shorty
         private void Initialise()
         {
             DafnyOptions.Install(new DafnyOptions());
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
+            DafnyOptions.O.ProverKillTime = 10;
             Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
             Bpl.OutputPrinter printer = new InvisibleConsolePrinter();
             Bpl.ExecutionEngine.printer = printer;
@@ -107,6 +108,7 @@ namespace shorty
             Assert.True(shorty.IsProgramValid());
             AssertStmt assert = (AssertStmt)simplifiedAsserts[0].Item2;
             Assert.True(assert.Expr is ParensExpression);
+            Assert.True(shorty.IsProgramValid());
             //TODO looking into the assertStmt to make sure it actually broke down
         }
 
@@ -133,6 +135,48 @@ namespace shorty
             Assert.AreEqual(3, removedCalcs.Item1.Count);
             Assert.AreEqual(1, removedCalcs.Item2.Count);
             Assert.AreEqual(1, removedCalcs.Item4.Count);
+            Assert.True(shorty.IsProgramValid());
+        }
+
+        [Test]
+        public void TestDifferentRemovals()
+        {
+            Initialise();
+            CompareAllRemovals(GetProgram("ListCopy.dfy"));
+        }
+
+        [Test]
+        public void ThouroughTestDifferentRemovals()
+        {
+            Initialise();
+            CompareAllRemovals(GetProgram("ListCopy.dfy"));
+            CompareAllRemovals(GetProgram("Calc.dfy"));
+            CompareAllRemovals(GetProgram("CombinedAsserts.dfy"));
+            CompareAllRemovals(GetProgram("Combinators.dfy"));
+            CompareAllRemovals(GetProgram("FindZero.dfy"));
+            CompareAllRemovals(GetProgram("Streams.dfy"));
+        }
+
+        private void CompareAllRemovals(Program program)
+        {
+            var oneAtATimeProg = SimpleCloner.CloneProgram(program);
+            var simulProg = SimpleCloner.CloneProgram(program);
+
+            Shorty oneAtATime = new Shorty(oneAtATimeProg, new OneAtATimeRemover(oneAtATimeProg));
+            Shorty simultaneous = new Shorty(simulProg, new SimultaneousMethodRemover(simulProg));
+
+            Assert.AreEqual(oneAtATime.FindRemovableAsserts().Count, simultaneous.FindRemovableAsserts().Count);
+            Assert.AreEqual(oneAtATime.FindRemovableInvariants().Count, simultaneous.FindRemovableInvariants().Count);
+            Assert.AreEqual(oneAtATime.FindRemovableDecreases().Count, simultaneous.FindRemovableDecreases().Count);
+            Assert.AreEqual(oneAtATime.FindRemovableLemmaCalls().Count, simultaneous.FindRemovableLemmaCalls().Count);
+            Assert.AreEqual(oneAtATime.FindRemovableCalcs().Item1.Count, simultaneous.FindRemovableCalcs().Item1.Count);
+            Assert.AreEqual(oneAtATime.FindRemovableCalcs().Item2.Count, simultaneous.FindRemovableCalcs().Item2.Count);
+            Assert.AreEqual(oneAtATime.FindRemovableCalcs().Item3.Count, simultaneous.FindRemovableCalcs().Item3.Count);
+            Assert.AreEqual(oneAtATime.FindRemovableCalcs().Item4.Count, simultaneous.FindRemovableCalcs().Item4.Count);
+            Assert.AreEqual(oneAtATime.GetSimplifiedAsserts().Count, simultaneous.GetSimplifiedAsserts().Count);
+            Assert.AreEqual(oneAtATime.GetSimplifiedInvariants().Count, simultaneous.GetSimplifiedInvariants().Count);
+            Assert.True(oneAtATime.IsProgramValid());
+            Assert.True(simultaneous.IsProgramValid());
         }
     }
 }

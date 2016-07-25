@@ -252,7 +252,7 @@ namespace shorty
         #endregion
     }
 
-    class AllRemovableTypes
+    public class AllRemovableTypes
     {
         public readonly Dictionary<MemberDecl, RemovableTypesInMember> RemovableTypesInMethods = new Dictionary<MemberDecl, RemovableTypesInMember>();
 
