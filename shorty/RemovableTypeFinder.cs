@@ -27,6 +27,13 @@ namespace shorty
             return _allRemovableTypes;
         }
 
+        public RemovableTypesInMember FindRemovableTypesInMember(MemberDecl member)
+        {
+            IdentifyTopLevelDecl(member.EnclosingClass);
+            FindRemovableTypesInMember(member, (ClassDecl) member.EnclosingClass);
+            return _allRemovableTypes.RemovableTypesInMethods[member];
+        }
+
         private void IdentifyModule(ModuleDefinition module)
         {
             if (_allMethods.ContainsKey(module)) return;

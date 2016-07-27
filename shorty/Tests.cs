@@ -145,7 +145,7 @@ namespace shorty
             CompareAllRemovals(GetProgram("ListCopy.dfy"));
         }
 
-        [Test]//[Ignore("Takes a very long time")]
+        [Test][Ignore("Takes a very long time")]
         public void ThouroughTestDifferentRemovals()
         {
             Initialise();

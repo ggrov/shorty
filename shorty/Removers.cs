@@ -442,8 +442,11 @@ namespace shorty
             return verifier.IsProgramValid(_program);
         }
 
-        public void FullSimplify(RemovableTypesInMember removableTypesInMember)
+        public SimplificationData FullSimplify(MemberDecl member)
         {
+            var removableTypeFinder = new RemovableTypeFinder(_program);
+            var removableTypesInMember = removableTypeFinder.FindRemovableTypesInMember(member);
+
             SimplificationData simpData = new SimplificationData();
 
             foreach (var wrap in removableTypesInMember.Asserts) {
@@ -488,6 +491,7 @@ namespace shorty
                 calcOps.AddRange(simplifiedItem.Item3);
             }
             simpData.SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(calcLines, calcBlocks, calcOps);
+            return simpData;
         }
 
         private bool RemoveItem<T>(Wrap<T> wrap)
