@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Diagnostics;
 using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Text;
@@ -53,14 +54,14 @@ namespace shorty
                 //Console.WriteLine(allOk ? "Verification Successful" : "Verification failed");
                 return oc == Microsoft.Boogie.PipelineOutcome.VerificationCompleted && allOk;
             }
-            catch /*(Exception e)*/ {
+            catch (Exception e) {
                 //Console.WriteLine("Verification failed: " + e.Message);
                 return false;
             }
         }
     }
 
-    class RemovableTypesInMember
+    public class RemovableTypesInMember
     {
         public MemberDecl Member { get; private set; }
         public readonly List<Wrap<Statement>> Asserts = new List<Wrap<Statement>>();
@@ -249,6 +250,8 @@ namespace shorty
             foreach (var wraps in memberWrapDictionary.Values) {
                 removableWraps.AddRange(RemoveWraps(wraps.AsReadOnly()));
             }
+            if(!IsProgramValid(_program))
+                throw new Exception("Program invalid after removal!");
             return removableWraps;
         }
 
@@ -409,6 +412,110 @@ namespace shorty
             wrap.ParentList.Remove(wrap.Removable);
             return new Tuple<Wrap<T>, int>(wrap, position);
         }
+    }
+
+    class SimplificationData
+    {
+        public List<AssertStmt> RemovableAsserts = new List<AssertStmt>();
+        public List<MaybeFreeExpression> RemovableInvariants = new List<MaybeFreeExpression>();
+        public List<Expression> RemovableDecreases = new List<Expression>();
+        public List<UpdateStmt> RemovableLemmaCalls = new List<UpdateStmt>();
+        public List<CalcStmt> RemovableCalcs = new List<CalcStmt>();
+        public List<Tuple<AssertStmt, AssertStmt>> SimplifiedAsserts = new List<Tuple<AssertStmt, AssertStmt>>();
+        public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> SimplifiedInvariants = new List<Tuple<MaybeFreeExpression, MaybeFreeExpression>>();
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifiedCalcs;
+
+    }
+
+    class MethodRemover
+    {
+        private readonly Program _program;
+
+        public MethodRemover(Program program)
+        {
+            _program = program;
+        }
+
+        private bool IsProgramValid()
+        {
+            var verifier = new SimpleVerifier();
+            return verifier.IsProgramValid(_program);
+        }
+
+        public void FullSimplify(RemovableTypesInMember removableTypesInMember)
+        {
+            SimplificationData simpData = new SimplificationData();
+
+            foreach (var wrap in removableTypesInMember.Asserts) {
+                if (!RemoveItem(wrap)) continue;
+                simpData.RemovableAsserts.Add((AssertStmt)wrap.Removable);
+            }
+            foreach (var wrap in removableTypesInMember.Invariants) {
+                if (!RemoveItem(wrap)) continue;
+                simpData.RemovableInvariants.Add(wrap.Removable);
+            }
+            foreach (var wrap in removableTypesInMember.Decreases) {
+                if (!RemoveItem(wrap)) continue;
+                simpData.RemovableDecreases.Add(wrap.Removable);
+            }
+            foreach (var wrap in removableTypesInMember.LemmaCalls) {
+                if (!RemoveItem(wrap)) continue;
+                simpData.RemovableLemmaCalls.Add((UpdateStmt) wrap.Removable);
+            }
+            foreach (var wrap in removableTypesInMember.Calcs) {
+                if (!RemoveItem(wrap)) continue;
+                simpData.RemovableCalcs.Add((CalcStmt) wrap.Removable);
+            }
+            foreach (var wrap in removableTypesInMember.Asserts) {
+                var simplifiedItem = SimplifyItem(wrap);
+                if (simplifiedItem == null) continue;
+                simpData.SimplifiedAsserts.Add(new Tuple<AssertStmt, AssertStmt>((AssertStmt) simplifiedItem.Item1, (AssertStmt) simplifiedItem.Item2));
+            }
+            foreach (var wrap in removableTypesInMember.Invariants) {
+                var simplifiedItem = SimplifyItem(wrap);
+                if (simplifiedItem == null) continue;
+                simpData.SimplifiedInvariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>(simplifiedItem.Item1, simplifiedItem.Item2));
+            }
+            var calcLines = new List<Expression>();
+            var calcBlocks = new List<BlockStmt>();
+            var calcOps = new List<CalcStmt.CalcOp>();
+
+            foreach (var wrap in removableTypesInMember.Calcs) {
+                var simplifiedItem = SimplifyCalc((CalcStmt)wrap.Removable);
+                if (simplifiedItem == null) continue;
+                calcLines.AddRange(simplifiedItem.Item1);
+                calcBlocks.AddRange(simplifiedItem.Item2);
+                calcOps.AddRange(simplifiedItem.Item3);
+            }
+            simpData.SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(calcLines, calcBlocks, calcOps);
+        }
+
+        private bool RemoveItem<T>(Wrap<T> wrap)
+        {
+            var index = wrap.ParentList.IndexOf(wrap.Removable);
+            wrap.ParentList.Remove(wrap.Removable);
+            var worked = IsProgramValid();
+            if (!worked) {
+                wrap.ParentList.Insert(index, wrap.Removable);
+            }
+            return worked;
+        }
+
+        private Tuple<T,T> SimplifyItem<T>(Wrap<T> wrap)
+        {
+            Simplifier simplifier = new Simplifier(_program);
+            var simplifiedWraps = simplifier.TrySimplifyItem(wrap);
+            if (simplifiedWraps == null) return null;
+            return new Tuple<T, T>(simplifiedWraps.Item1.Removable, simplifiedWraps.Item2.Removable);
+        }
+
+        private Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifyCalc(CalcStmt calc)
+        {
+            CalcRemover calcRemover = new CalcRemover(_program);
+            return calcRemover.RemoveFromCalc(calc);
+        }
+
+        
     }
 
     class AlreadyRemovedException : Exception {}

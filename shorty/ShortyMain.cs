@@ -54,7 +54,7 @@ namespace shorty
         private static int GetInputAsInt(string input)
         {
             int ans;
-            if (int.TryParse(input, out ans)) {
+            if (!int.TryParse(input, out ans)) {
                 ans = 0;
             }
             return ans;
@@ -262,7 +262,8 @@ namespace shorty
         private static void SimplifyAndPrintPrograms(List<Program> dafnyPrograms)
         {
             foreach (var program in dafnyPrograms) {
-                var shorty = new Shorty(program, new SimultaneousMethodRemover(program));
+                Console.WriteLine("Simplifying "+program.Name);
+                var shorty = new Shorty(program, new OneAtATimeRemover(program));
                 shorty.FindRemovableAsserts();
                 shorty.FindRemovableInvariants();
                 shorty.FindRemovableDecreases();

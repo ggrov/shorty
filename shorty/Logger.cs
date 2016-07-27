@@ -299,6 +299,13 @@ namespace shorty
             else
                 GetRemovedItemsCount(shorty);
             var countAfter = GetCount(shorty);
+            if (!shorty.IsProgramValid()) {
+//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shotied\\short-"+shorty.Program.Name)) {
+//                    shorty.PrintProgram(writer);
+//                }
+                throw new Exception("Program not valid after initial test!");
+
+            }
             return new Tuple<long, long, long, int, int>(data.Item1, data.Item2, data.Item3, countBefore, countAfter);
         }
 
@@ -321,8 +328,12 @@ namespace shorty
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 0;
             var watch = new Stopwatch();
             watch.Start();
-            if (!shorty.IsProgramValid())
+            if (!shorty.IsProgramValid()) {
+//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\Shortied\\short-" + shorty.Program.Name)) {
+//                    shorty.PrintProgram(writer);
+//                }
                 throw new Exception("Cannot find verification time as program is not valid!");
+            }
             watch.Stop();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             return watch.ElapsedMilliseconds;

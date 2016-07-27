@@ -217,6 +217,8 @@ namespace shorty
             foreach (var removedAssert in removedAsserts) {
                 _allRemovableTypes.RemoveAssert(removedAssert);
             }
+            if(!IsProgramValid())
+                throw new Exception("safasdfsaf");
             return Wrap<Statement>.GetRemovables(removedAsserts);
         }
 

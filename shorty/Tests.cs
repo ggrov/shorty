@@ -145,7 +145,7 @@ namespace shorty
             CompareAllRemovals(GetProgram("ListCopy.dfy"));
         }
 
-        [Test]
+        [Test]//[Ignore("Takes a very long time")]
         public void ThouroughTestDifferentRemovals()
         {
             Initialise();
@@ -169,10 +169,12 @@ namespace shorty
             Assert.AreEqual(oneAtATime.FindRemovableInvariants().Count, simultaneous.FindRemovableInvariants().Count);
             Assert.AreEqual(oneAtATime.FindRemovableDecreases().Count, simultaneous.FindRemovableDecreases().Count);
             Assert.AreEqual(oneAtATime.FindRemovableLemmaCalls().Count, simultaneous.FindRemovableLemmaCalls().Count);
-            Assert.AreEqual(oneAtATime.FindRemovableCalcs().Item1.Count, simultaneous.FindRemovableCalcs().Item1.Count);
-            Assert.AreEqual(oneAtATime.FindRemovableCalcs().Item2.Count, simultaneous.FindRemovableCalcs().Item2.Count);
-            Assert.AreEqual(oneAtATime.FindRemovableCalcs().Item3.Count, simultaneous.FindRemovableCalcs().Item3.Count);
-            Assert.AreEqual(oneAtATime.FindRemovableCalcs().Item4.Count, simultaneous.FindRemovableCalcs().Item4.Count);
+            var oaatRemovedCalcs = oneAtATime.FindRemovableCalcs();
+            var simulRemovedCalcs = simultaneous.FindRemovableCalcs();
+            Assert.AreEqual(oaatRemovedCalcs.Item1.Count, simulRemovedCalcs.Item1.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item2.Count, simulRemovedCalcs.Item2.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item3.Count, simulRemovedCalcs.Item3.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, simulRemovedCalcs.Item4.Count);
             Assert.AreEqual(oneAtATime.GetSimplifiedAsserts().Count, simultaneous.GetSimplifiedAsserts().Count);
             Assert.AreEqual(oneAtATime.GetSimplifiedInvariants().Count, simultaneous.GetSimplifiedInvariants().Count);
             Assert.True(oneAtATime.IsProgramValid());
