@@ -17,8 +17,8 @@ namespace shorty
         private void Initialise()
         {
             DafnyOptions.Install(new DafnyOptions());
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             DafnyOptions.O.ProverKillTime = 10;
@@ -26,16 +26,17 @@ namespace shorty
             Bpl.OutputPrinter printer = new InvisibleConsolePrinter();
             Bpl.ExecutionEngine.printer = printer;
         }
+
         private Program GetProgram(string fileName)
         {
-            string dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+            var dir = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
             dir = Directory.GetParent(dir).FullName;
             dir = Directory.GetParent(dir).FullName;
             dir = Directory.GetParent(dir).FullName;
             dir = dir + "\\tests\\" + fileName;
             Console.WriteLine(dir);
-            int nameStart = fileName.LastIndexOf('\\') + 1;
-            string programName = fileName.Substring(nameStart, fileName.Length - nameStart);
+            var nameStart = fileName.LastIndexOf('\\') + 1;
+            var programName = fileName.Substring(nameStart, fileName.Length - nameStart);
 
             ModuleDecl module = new LiteralModuleDecl(new DefaultModuleDecl(), null);
             var builtIns = new BuiltIns();
@@ -44,12 +45,18 @@ namespace shorty
             return new Program(programName, module, builtIns, new InvisibleErrorReporter());
         }
 
+        private Shorty GetShorty(Program program)
+        {
+            return new Shorty(program, new OneAtATimeRemover(program));
+//            return new Shorty(program, new SimultaneousMethodRemover(program));
+        }
+
         [Test]
         public void AssertRemoval()
         {
             Initialise();
-            Program program = GetProgram("FindZero.dfy");
-            Shorty shorty = new Shorty(program, new SimultaneousMethodRemover(program));
+            var program = GetProgram("FindZero.dfy");
+            var shorty = GetShorty(program);
 
             Assert.AreEqual(3, shorty.Asserts.Count);
             Assert.AreEqual(2, shorty.FindRemovableAsserts().Count);
@@ -61,8 +68,8 @@ namespace shorty
         public void InvariantRemoval()
         {
             Initialise();
-            Program program = GetProgram("ListCopy.dfy");
-            Shorty shorty = new Shorty(program, new SimultaneousMethodRemover(program));
+            var program = GetProgram("ListCopy.dfy");
+            var shorty = GetShorty(program);
 
             Assert.AreEqual(5, shorty.Invariants.Count);
             Assert.AreEqual(1, shorty.FindRemovableInvariants().Count);
@@ -74,8 +81,8 @@ namespace shorty
         public void DecreasesRemoval()
         {
             Initialise();
-            Program program = GetProgram("Combinators.dfy");
-            Shorty shorty = new Shorty(program, new SimultaneousMethodRemover(program));
+            var program = GetProgram("Combinators.dfy");
+            var shorty = GetShorty(program);
 
             Assert.AreEqual(4, shorty.Decreases.Count + shorty.DecreasesWildCards.Count);
             Assert.AreEqual(1, shorty.FindRemovableDecreases().Count);
@@ -87,8 +94,8 @@ namespace shorty
         public void LemmaCallRemoval()
         {
             Initialise();
-            Program program = GetProgram("Streams.dfy");
-            Shorty shorty = new Shorty(program, new SimultaneousMethodRemover(program));
+            var program = GetProgram("Streams.dfy");
+            var shorty = GetShorty(program);
 
             Assert.AreEqual(21, shorty.LemmaCalls.Count);
             Assert.AreEqual(17, shorty.FindRemovableLemmaCalls().Count);
@@ -100,13 +107,13 @@ namespace shorty
         public void SimplifyAsserts()
         {
             Initialise();
-            Program program = GetProgram("CombinedAsserts.dfy");
-            Shorty shorty = new Shorty(program, new SimultaneousMethodRemover(program));
+            var program = GetProgram("CombinedAsserts.dfy");
+            var shorty = GetShorty(program);
 
-            List<Tuple<Statement, Statement>> simplifiedAsserts = shorty.GetSimplifiedAsserts();
+            var simplifiedAsserts = shorty.GetSimplifiedAsserts();
             Assert.AreEqual(1, simplifiedAsserts.Count);
             Assert.True(shorty.IsProgramValid());
-            AssertStmt assert = (AssertStmt)simplifiedAsserts[0].Item2;
+            var assert = (AssertStmt)simplifiedAsserts[0].Item2;
             Assert.True(assert.Expr is ParensExpression);
             Assert.True(shorty.IsProgramValid());
             //TODO looking into the assertStmt to make sure it actually broke down
@@ -116,8 +123,8 @@ namespace shorty
         public void SimplifyInvariants()
         {
             Initialise();
-            Program program = GetProgram("ListCopy.dfy");
-            Shorty shorty = new Shorty(program, new SimultaneousMethodRemover(program));
+            var program = GetProgram("ListCopy.dfy");
+            var shorty = GetShorty(program);
 
             var simplifiedInvariants = shorty.GetSimplifiedInvariants();
             Assert.AreEqual(1, simplifiedInvariants.Count);
@@ -128,8 +135,8 @@ namespace shorty
         public void TestCalcStatements()
         {
             Initialise();
-            Program program = GetProgram("Calc.dfy");
-            Shorty shorty = new Shorty(program, new OneAtATimeRemover(program));
+            var program = GetProgram("Calc.dfy");
+            var shorty = GetShorty(program);
 
             var removedCalcs = shorty.FindRemovableCalcs();
             Assert.AreEqual(3, removedCalcs.Item1.Count);
@@ -145,7 +152,7 @@ namespace shorty
             CompareAllRemovals(GetProgram("ListCopy.dfy"));
         }
 
-        [Test][Ignore("Takes a very long time")]
+        [Test]//[Ignore("Takes a very long time")]
         public void ThouroughTestDifferentRemovals()
         {
             Initialise();
@@ -162,8 +169,8 @@ namespace shorty
             var oneAtATimeProg = SimpleCloner.CloneProgram(program);
             var simulProg = SimpleCloner.CloneProgram(program);
 
-            Shorty oneAtATime = new Shorty(oneAtATimeProg, new OneAtATimeRemover(oneAtATimeProg));
-            Shorty simultaneous = new Shorty(simulProg, new SimultaneousMethodRemover(simulProg));
+            var oneAtATime = new Shorty(oneAtATimeProg, new OneAtATimeRemover(oneAtATimeProg));
+            var simultaneous = new Shorty(simulProg, new SimultaneousMethodRemover(simulProg));
 
             Assert.AreEqual(oneAtATime.FindRemovableAsserts().Count, simultaneous.FindRemovableAsserts().Count);
             Assert.AreEqual(oneAtATime.FindRemovableInvariants().Count, simultaneous.FindRemovableInvariants().Count);

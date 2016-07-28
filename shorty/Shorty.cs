@@ -218,7 +218,7 @@ namespace shorty
                 _allRemovableTypes.RemoveAssert(removedAssert);
             }
             if(!IsProgramValid())
-                throw new Exception("safasdfsaf");
+                throw new Exception("Program invalid after assertion removal");
             return Wrap<Statement>.GetRemovables(removedAsserts);
         }
 

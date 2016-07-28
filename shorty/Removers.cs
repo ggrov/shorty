@@ -1,9 +1,10 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
 using System.Linq;
+using System.Net;
 using System.Text;
 using System.Threading.Tasks;
 using Microsoft.Dafny;
@@ -81,11 +82,32 @@ namespace shorty
     {
         public T Removable { get; protected set; }
         public List<T> ParentList { get; private set; }
+        public int Index { get; private set; } = -1;
+        public bool Removed;
+
+        public void Remove()
+        {
+            if (Removed) return;
+            Index = ParentList.IndexOf(Removable);
+            if(Index < 0) throw new Exception("Removable item is not in its ParentList");
+            ParentList.Remove(Removable);
+            Removed = true;
+        }
+
+        public void Reinsert()
+        {
+            if (!Removed) return;
+            ParentList.Insert(Index, Removable);
+            Index = -1;
+            Removed = false;
+        }
 
         public Wrap(T removable, List<T> parentList)
         {
+            Contract.Requires(parentList.Contains(removable));
             Removable = removable;
             ParentList = parentList;
+            Removed = false;
         }
 
         public static List<T> GetRemovables(List<Wrap<T>> wrapList)
@@ -267,20 +289,10 @@ namespace shorty
 
         public bool TryRemove<T>(Wrap<T> wrap)
         {
-            var parentBody = wrap.ParentList;
-            var removable = wrap.Removable;
-            var index = parentBody.IndexOf(removable);
-            parentBody.Remove(removable);
-            if (IsProgramValid(_program)) {
+            wrap.Remove();
+            if (IsProgramValid(_program))
                 return true;
-            }
-            if (index == -1) {
-                parentBody.Add(removable);
-                if (!IsProgramValid(_program))
-                    throw new Exception("removable could not be added to parent list!");
-            }
-            else
-                parentBody.Insert(index, removable);
+            wrap.Reinsert();
             return false;
         }
 
@@ -299,26 +311,26 @@ namespace shorty
 
         internal class SimilRemoverStorage<T>
         {
-            public Dictionary<MemberDecl, Tuple<Wrap<T>, int>> LastRemovedItem = new Dictionary<MemberDecl, Tuple<Wrap<T>, int>>();
-            private List<MemberDecl> _alreadyReAddedMembers = new List<MemberDecl>();
+            public Dictionary<MemberDecl, Wrap<T>> LastRemovedItem = new Dictionary<MemberDecl, Wrap<T>>();
+            private readonly List<MemberDecl> _alreadyReAddedMembers = new List<MemberDecl>();
+
             public void ErrorInformation(Microsoft.Boogie.ErrorInformation errorInfo)
             {
                 MemberDecl member = null;
                 try {
                     member = FindMethod(errorInfo.Tok.pos);
                 }
-                catch (AlreadyRemovedException e) {
+                catch (AlreadyRemovedException) {
                     return;
                 }
-                catch (Exception e) {
+                catch (Exception) {
                     throw new Exception("Could not find member");
                 }
 
                 if (member == null) return;
-                LastRemovedItem[member].Item1.ParentList.Insert(LastRemovedItem[member].Item2, LastRemovedItem[member].Item1.Removable);
+                LastRemovedItem[member].Reinsert();
                 _alreadyReAddedMembers.Add(member);
                 LastRemovedItem.Remove(member);
-                
             }
 
             private MemberDecl FindMethod(int pos)
@@ -346,7 +358,7 @@ namespace shorty
                     }
                 }
                 //still hasn't been found.  Possible we're dealing with a function then
-                //Functions have no end tokens! (assuming the BOdyEndTok thing isn't working for whatever reason
+                //Functions have no end tokens - (assuming the BodyEndTok thing isn't working for whatever reason
                 //we will look through all the functions and find the one with the highest pos that is less than the errors pos.
                 Function currentFunction = null;
                 foreach (var memberDecl in LastRemovedItem.Keys) {
@@ -360,7 +372,7 @@ namespace shorty
                 }
                 if(currentFunction != null) return currentFunction;
                 //TODO is it possible something could have been removed in a field?
-                throw new Exception("Could not find method"); //TODO:  this won't be caught as it is caught in boogie... will have to set a flag or something
+                throw new Exception("Could not find method"); //TODO:  this won't be caught as it is caught in boogie somewhere... will have to set a flag or something
             }
         }
 
@@ -379,15 +391,15 @@ namespace shorty
                 finished = RemoveAndTrackItemsForThisRun(memberWrapDictionary, index++, similRemover);
                 RunVerification(similRemover);
                 ReinsertInvalidItems(similRemover, removableWraps);
-                similRemover.LastRemovedItem = new Dictionary<MemberDecl, Tuple<Wrap<T>, int>>();
+                similRemover.LastRemovedItem = new Dictionary<MemberDecl, Wrap<T>>();
             }
             return removableWraps;
         }
 
         private static void ReinsertInvalidItems<T>(SimilRemoverStorage<T> similRemover, List<Wrap<T>> removableWraps)
         {
-            foreach (var value in similRemover.LastRemovedItem.Values) //re-add all the items 
-                removableWraps.Add(value.Item1);
+            foreach (var wrap in similRemover.LastRemovedItem.Values)
+                removableWraps.Add(wrap);
         }
 
         private void RunVerification<T>(SimilRemoverStorage<T> similRemover)
@@ -400,17 +412,12 @@ namespace shorty
             var finished = true;
             foreach (var method in memberWrapDictionary.Keys) {
                 if (memberWrapDictionary[method].Count <= index) continue; //All items in this method have been done
-                similRemover.LastRemovedItem.Add(method, RemoveOne(memberWrapDictionary[method][index])); //Track the item
+                var wrap = memberWrapDictionary[method][index];
+                wrap.Remove();
+                similRemover.LastRemovedItem.Add(method, wrap); //Track the item
                 finished = false;
             }
             return finished;
-        }
-
-        private Tuple<Wrap<T>, int> RemoveOne<T>(Wrap<T> wrap)
-        {
-            var position = wrap.ParentList.IndexOf(wrap.Removable);
-            wrap.ParentList.Remove(wrap.Removable);
-            return new Tuple<Wrap<T>, int>(wrap, position);
         }
     }
 
@@ -549,24 +556,21 @@ namespace shorty
 
         public Tuple<Wrap<T>, Wrap<T>> TrySimplifyItem<T>(Wrap<T> wrap)
         {
-            var item = wrap.Removable;
-            var parent = wrap.ParentList;
             var binExpr = GetExpr(wrap.Removable) as BinaryExpr;
             if (binExpr != null)
                 if (binExpr.Op != BinaryExpr.Opcode.And ) return null; //TODO simplify when theres an implies
 
-            var index = parent.IndexOf(item);
-            parent.Remove(item);
+            wrap.Remove();
             if (!_verifier.IsProgramValid(_program)) {
-                return SimplifyItem(wrap, index);
+                return SimplifyItem(wrap);
             }
             Console.WriteLine("Whole assert can be completely removed separately"); //TODO figure out what to do here (remove from _removableItems?)
             return null;
         }
 
-        private Tuple<Wrap<T>, Wrap<T>> SimplifyItem<T>(Wrap<T> wrap, int index)
+        private Tuple<Wrap<T>, Wrap<T>> SimplifyItem<T>(Wrap<T> wrap)
         {
-            var brokenItemWraps = BreakAndReinsertItem(wrap, index);
+            var brokenItemWraps = BreakAndReinsertItem(wrap);
             var itemRemoved = false;
             //Test to see which can be removed
             for (var assertNum = brokenItemWraps.Count - 1; assertNum >= 0; assertNum--) {
@@ -579,11 +583,12 @@ namespace shorty
 
             //Remove the broken items from their parent
             foreach (var brokenItem in brokenItemWraps)
-                brokenItem.ParentList.Remove(brokenItem.Removable);
+//                brokenItem.ParentList.Remove(brokenItem.Removable);
+                brokenItem.Remove();
 
             //If nothing was removed, reinsert the original to its parent
             if (!itemRemoved) {
-                wrap.ParentList.Insert(index, wrap.Removable);
+                wrap.Reinsert();
                 return null;    
             }
 
@@ -595,10 +600,10 @@ namespace shorty
 
             //Create a new item
             var newItem = GetNewNodeFromItem(wrap.Removable, newExpr);
+            //Insert the item
+            wrap.ParentList.Insert(wrap.Index, newItem);
             //Wrap the new item
             var newWrap = new Wrap<T>(newItem, wrap.ParentList);
-            //Actually insert the item
-            newWrap.ParentList.Insert(index, newWrap.Removable);
 
             //Test quickly
             var ver = new SimpleVerifier();
@@ -607,11 +612,11 @@ namespace shorty
             return new Tuple<Wrap<T>, Wrap<T>>(wrap, newWrap);
         }
 
-        private List<Wrap<T>> BreakAndReinsertItem<T>(Wrap<T> wrap, int index)
+        private List<Wrap<T>> BreakAndReinsertItem<T>(Wrap<T> wrap)
         {
             var brokenItems = BreakDownExpr(wrap);
-            foreach (var brokenAssert in brokenItems) {
-                brokenAssert.ParentList.Insert(index, brokenAssert.Removable);
+            foreach (var brokenitem in brokenItems) {
+                brokenitem.ParentList.Insert(wrap.Index, brokenitem.Removable);
             }
             return brokenItems;
         }
