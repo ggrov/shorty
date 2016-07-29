@@ -79,6 +79,17 @@ namespace shorty
 
         #endregion
 
+        public SimplificationData FastRemoveAllRemovables()
+        {
+            var simpData = new SimplificationData();
+
+            SimultaneousAllTypeMethodRemover remover = new SimultaneousAllTypeMethodRemover(Program);
+
+            simpData = remover.Remove(Program, _allRemovableTypes);
+
+            return simpData;
+        }
+
         #region Lemma Calls
 
         public List<Statement> FindRemovableLemmaCalls()
@@ -166,7 +177,7 @@ namespace shorty
 
         public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> GetSimplifiedInvariants()
         {
-            Simplifier simplifier = new Simplifier(Program);
+            var simplifier = new Simplifier(Program);
             var wrappedInvariants = simplifier.GetSimplifiedItems(_allRemovableTypes.Invariants);
             var invariants = new List<Tuple<MaybeFreeExpression, MaybeFreeExpression>>();
             foreach (var wrappedInvariant in wrappedInvariants) {
@@ -180,7 +191,7 @@ namespace shorty
 
         public Dictionary<Method, List<List<MaybeFreeExpression>>> TestDifferentInvariantRemovals()
         {
-            RemovalOrderTester<MaybeFreeExpression> removalOrderTester = new RemovalOrderTester<MaybeFreeExpression>(_allRemovableTypes.GetInvariantDictionary(), Program);
+            var removalOrderTester = new RemovalOrderTester<MaybeFreeExpression>(_allRemovableTypes.GetInvariantDictionary(), Program);
             return removalOrderTester.TestDifferentRemovals();
         }
 
@@ -194,7 +205,7 @@ namespace shorty
         /// <returns></returns>
         public List<Tuple<Statement, Statement>> GetSimplifiedAsserts()
         {
-            Simplifier simplifier = new Simplifier(Program);
+            var simplifier = new Simplifier(Program);
             var wrappedAsserts = simplifier.GetSimplifiedItems(_allRemovableTypes.Asserts);
             var asserts = new List<Tuple<Statement, Statement>>();
             foreach (var assert in wrappedAsserts) {
@@ -207,7 +218,7 @@ namespace shorty
 
         public Dictionary<Method, List<List<Statement>>> TestDifferentAssertRemovals()
         {
-            RemovalOrderTester<Statement> removalOrderTester = new RemovalOrderTester<Statement>(_allRemovableTypes.GetAssertDictionary(), Program);
+            var removalOrderTester = new RemovalOrderTester<Statement>(_allRemovableTypes.GetAssertDictionary(), Program);
             return removalOrderTester.TestDifferentRemovals();
         }
 
@@ -253,7 +264,8 @@ namespace shorty
     {
         public readonly Dictionary<MemberDecl, RemovableTypesInMember> RemovableTypesInMethods = new Dictionary<MemberDecl, RemovableTypesInMember>();
 
-        public ReadOnlyCollection<Wrap<Statement>> Asserts {
+        public ReadOnlyCollection<Wrap<Statement>> Asserts
+        {
             get {
                 var asserts = new List<Wrap<Statement>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)
@@ -262,7 +274,8 @@ namespace shorty
             }
         }
 
-        public ReadOnlyCollection<Wrap<MaybeFreeExpression>> Invariants {
+        public ReadOnlyCollection<Wrap<MaybeFreeExpression>> Invariants
+        {
             get {
                 var invariants = new List<Wrap<MaybeFreeExpression>>();
                 foreach (var removableTypes in RemovableTypesInMethods.Values)

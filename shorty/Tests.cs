@@ -17,8 +17,8 @@ namespace shorty
         private void Initialise()
         {
             DafnyOptions.Install(new DafnyOptions());
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             DafnyOptions.O.ProverKillTime = 10;
@@ -152,7 +152,45 @@ namespace shorty
             CompareAllRemovals(GetProgram("ListCopy.dfy"));
         }
 
-        [Test]//[Ignore("Takes a very long time")]
+        [Test]
+        public void TestMethodRemoval()
+        {
+            Initialise();
+            var program = GetProgram("ListCopy.dfy");
+            var members = GetMembers(program);
+            foreach (var member in members) {
+                if (member.Name == "Copy") {
+                    var methodRemover = new MethodRemover(program);
+                    var removables = methodRemover.FullSimplify(member);
+                    Assert.AreEqual(1,removables.RemovableInvariants.Count);
+                    Assert.AreEqual(3,removables.RemovableAsserts.Count);
+                    var verifier = new SimpleVerifier();
+                    Assert.True(verifier.IsProgramValid(program));
+                }
+            }
+        }
+
+        [Test]
+        public void TestSimultaneousAllTypeMethodRemover()
+        {
+            Initialise();
+            var program = GetProgram("Streams.dfy");
+            var shorty = GetShorty(program);
+
+            shorty.FastRemoveAllRemovables();
+
+
+
+        }
+
+        private List<MemberDecl> GetMembers(Program program)
+        {
+            var members = new List<MemberDecl>();
+            members.AddRange(((ClassDecl)program.DefaultModuleDef.TopLevelDecls[0]).Members);
+            return members;
+        }
+
+        [Test][Ignore("Takes a very long time")]
         public void ThouroughTestDifferentRemovals()
         {
             Initialise();

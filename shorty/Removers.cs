@@ -5,9 +5,15 @@ using System.Diagnostics;
 using System.Diagnostics.Contracts;
 using System.Linq;
 using System.Net;
+using System.Resources;
 using System.Text;
 using System.Threading.Tasks;
+using Microsoft.Boogie;
 using Microsoft.Dafny;
+using NUnit.Framework;
+using NUnit.Framework.Internal.Execution;
+using Function = Microsoft.Dafny.Function;
+using Program = Microsoft.Dafny.Program;
 
 namespace shorty
 {
@@ -29,8 +35,7 @@ namespace shorty
 
         public bool IsProgramValid(Program program, Microsoft.Boogie.ErrorReporterDelegate errorDelegate)
         {
-            
-            try{
+            try {
                 var programId = "main_program_id";
                 var stats = new Microsoft.Boogie.PipelineStatistics();
                 var translator = new Translator(new InvisibleErrorReporter());
@@ -55,7 +60,7 @@ namespace shorty
                 //Console.WriteLine(allOk ? "Verification Successful" : "Verification failed");
                 return oc == Microsoft.Boogie.PipelineOutcome.VerificationCompleted && allOk;
             }
-            catch (Exception e) {
+            catch (Exception) {
                 //Console.WriteLine("Verification failed: " + e.Message);
                 return false;
             }
@@ -82,14 +87,23 @@ namespace shorty
     {
         public T Removable { get; protected set; }
         public List<T> ParentList { get; private set; }
-        public int Index { get; private set; } = -1;
+        public int Index { get; private set; }
         public bool Removed;
+
+        public Wrap(T removable, List<T> parentList)
+        {
+            Contract.Requires(parentList.Contains(removable));
+            Removable = removable;
+            ParentList = parentList;
+            Removed = false;
+            Index = -1;
+        }
 
         public void Remove()
         {
             if (Removed) return;
             Index = ParentList.IndexOf(Removable);
-            if(Index < 0) throw new Exception("Removable item is not in its ParentList");
+            if (Index < 0) throw new Exception("Removable item is not in its ParentList");
             ParentList.Remove(Removable);
             Removed = true;
         }
@@ -99,14 +113,6 @@ namespace shorty
             if (!Removed) return;
             ParentList.Insert(Index, Removable);
             Index = -1;
-            Removed = false;
-        }
-
-        public Wrap(T removable, List<T> parentList)
-        {
-            Contract.Requires(parentList.Contains(removable));
-            Removable = removable;
-            ParentList = parentList;
             Removed = false;
         }
 
@@ -272,7 +278,7 @@ namespace shorty
             foreach (var wraps in memberWrapDictionary.Values) {
                 removableWraps.AddRange(RemoveWraps(wraps.AsReadOnly()));
             }
-            if(!IsProgramValid(_program))
+            if (!IsProgramValid(_program))
                 throw new Exception("Program invalid after removal!");
             return removableWraps;
         }
@@ -303,22 +309,74 @@ namespace shorty
         }
     }
 
+    /// <summary>
+    /// Contains methods for dealing with the error information when 
+    /// verification failed for reinserting the items on simultaneous 
+    /// removal approaches
+    /// </summary>
+    abstract class VerificationErrorInformationRetriever
+    {
+        public abstract void ErrorInformation(Microsoft.Boogie.ErrorInformation errorInfo);
+
+        protected MemberDecl FindMethod(int pos, IEnumerable<MemberDecl> members, List<MemberDecl> alreadyReAddedMembers)
+        {
+            var memberDecls = members as IList<MemberDecl> ?? members.ToList();
+            foreach (var member in memberDecls) {
+                if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos)
+                    return member;
+                if (member.BodyStartTok.pos != 0 || member.BodyEndTok.pos != 0) continue; //Sometimes this bugs out... needs resolved first?
+                var method = member as Method;
+                if (method == null) continue;
+                if (method.Body.Tok.pos <= pos && method.Body.EndTok.pos >= pos)
+                    return member;
+            }
+            //The method could not be found - maybe the removal caused two errors so we already have fixed it? lets be sure
+            foreach (var member in alreadyReAddedMembers) {
+                if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos)
+                    throw new AlreadyRemovedException();
+                if (member.BodyStartTok.pos != 0 || member.BodyEndTok.pos != 0) continue; //Sometimes this bugs out...
+                var method = member as Method;
+                if (method != null) {
+                    if (method.Body.Tok.pos <= pos && method.Body.EndTok.pos >= pos)
+                        throw new AlreadyRemovedException();
+                    continue;
+                }
+            }
+            //still hasn't been found.  Possible we're dealing with a function then
+            //Functions have no end tokens - (assuming the BodyEndTok thing isn't working for whatever reason
+            //we will look through all the functions and find the one with the highest pos that is less than the errors pos.
+            Function currentFunction = null;
+            foreach (var memberDecl in memberDecls) {
+                var function = memberDecl as Function;
+                if (function == null) continue;
+                if (function.tok.pos >= pos) continue; //function occurs after our token - no chance this is the one
+                if (currentFunction == null)
+                    currentFunction = function;
+                else if (function.tok.pos > currentFunction.tok.pos)
+                    currentFunction = function;
+            }
+            if (currentFunction != null) return currentFunction;
+            //TODO is it possible something could have been removed in a field?
+            throw new Exception("Could not find method"); //TODO:  this won't be caught as it is caught in boogie somewhere... will have to set a flag or something
+        }
+    }
+
     internal class SimultaneousMethodRemover : IRemover
     {
         // Goes though each method, removes one thing then verifies and reinserts from the error messages
         private readonly Program _program;
         private readonly SimpleVerifier _simpleVerifier = new SimpleVerifier();
 
-        internal class SimilRemoverStorage<T>
+        internal class SimilRemoverStorage<T> : VerificationErrorInformationRetriever
         {
             public Dictionary<MemberDecl, Wrap<T>> LastRemovedItem = new Dictionary<MemberDecl, Wrap<T>>();
             private readonly List<MemberDecl> _alreadyReAddedMembers = new List<MemberDecl>();
 
-            public void ErrorInformation(Microsoft.Boogie.ErrorInformation errorInfo)
+            public override void ErrorInformation(Microsoft.Boogie.ErrorInformation errorInfo)
             {
                 MemberDecl member = null;
                 try {
-                    member = FindMethod(errorInfo.Tok.pos);
+                    member = FindMethod(errorInfo.Tok.pos, LastRemovedItem.Keys, _alreadyReAddedMembers);
                 }
                 catch (AlreadyRemovedException) {
                     return;
@@ -331,48 +389,6 @@ namespace shorty
                 LastRemovedItem[member].Reinsert();
                 _alreadyReAddedMembers.Add(member);
                 LastRemovedItem.Remove(member);
-            }
-
-            private MemberDecl FindMethod(int pos)
-            {
-                
-                foreach (var member in LastRemovedItem.Keys) {
-                    if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos)
-                        return member;
-                    if (member.BodyStartTok.pos != 0 || member.BodyEndTok.pos != 0) continue; //Sometimes this bugs out... needs resolved first?
-                    var method = member as Method;
-                    if (method == null) continue;
-                    if (method.Body.Tok.pos <= pos && method.Body.EndTok.pos >= pos)
-                        return member;
-                }
-                //The method could not be found - maybe the removal caused two errors so we already have fixed it? lets be sure
-                foreach (var member in _alreadyReAddedMembers) {
-                    if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos)
-                        throw new AlreadyRemovedException();
-                    if (member.BodyStartTok.pos != 0 || member.BodyEndTok.pos != 0) continue; //Sometimes this bugs out...
-                    var method = member as Method;
-                    if (method != null) {
-                        if (method.Body.Tok.pos <= pos && method.Body.EndTok.pos >= pos)
-                            throw new AlreadyRemovedException();
-                        continue;
-                    }
-                }
-                //still hasn't been found.  Possible we're dealing with a function then
-                //Functions have no end tokens - (assuming the BodyEndTok thing isn't working for whatever reason
-                //we will look through all the functions and find the one with the highest pos that is less than the errors pos.
-                Function currentFunction = null;
-                foreach (var memberDecl in LastRemovedItem.Keys) {
-                    var function = memberDecl as Function;
-                    if (function == null) continue;
-                    if (function.tok.pos >= pos) continue; //function occurs after our token - no chance this is the one
-                    if (currentFunction == null)
-                        currentFunction = function;
-                    else if (function.tok.pos > currentFunction.tok.pos)
-                        currentFunction = function;
-                }
-                if(currentFunction != null) return currentFunction;
-                //TODO is it possible something could have been removed in a field?
-                throw new Exception("Could not find method"); //TODO:  this won't be caught as it is caught in boogie somewhere... will have to set a flag or something
             }
         }
 
@@ -421,17 +437,16 @@ namespace shorty
         }
     }
 
-    class SimplificationData
+    public class SimplificationData
     {
-        public List<AssertStmt> RemovableAsserts = new List<AssertStmt>();
+        public List<Statement> RemovableAsserts = new List<Statement>();
         public List<MaybeFreeExpression> RemovableInvariants = new List<MaybeFreeExpression>();
         public List<Expression> RemovableDecreases = new List<Expression>();
-        public List<UpdateStmt> RemovableLemmaCalls = new List<UpdateStmt>();
+        public List<Statement> RemovableLemmaCalls = new List<Statement>();
         public List<CalcStmt> RemovableCalcs = new List<CalcStmt>();
-        public List<Tuple<AssertStmt, AssertStmt>> SimplifiedAsserts = new List<Tuple<AssertStmt, AssertStmt>>();
+        public List<Tuple<Statement, Statement>> SimplifiedAsserts = new List<Tuple<Statement, Statement>>();
         public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> SimplifiedInvariants = new List<Tuple<MaybeFreeExpression, MaybeFreeExpression>>();
         public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifiedCalcs;
-
     }
 
     class MethodRemover
@@ -454,44 +469,19 @@ namespace shorty
             var removableTypeFinder = new RemovableTypeFinder(_program);
             var removableTypesInMember = removableTypeFinder.FindRemovableTypesInMember(member);
 
-            SimplificationData simpData = new SimplificationData();
-
-            foreach (var wrap in removableTypesInMember.Asserts) {
-                if (!RemoveItem(wrap)) continue;
-                simpData.RemovableAsserts.Add((AssertStmt)wrap.Removable);
-            }
-            foreach (var wrap in removableTypesInMember.Invariants) {
-                if (!RemoveItem(wrap)) continue;
-                simpData.RemovableInvariants.Add(wrap.Removable);
-            }
-            foreach (var wrap in removableTypesInMember.Decreases) {
-                if (!RemoveItem(wrap)) continue;
-                simpData.RemovableDecreases.Add(wrap.Removable);
-            }
-            foreach (var wrap in removableTypesInMember.LemmaCalls) {
-                if (!RemoveItem(wrap)) continue;
-                simpData.RemovableLemmaCalls.Add((UpdateStmt) wrap.Removable);
-            }
-            foreach (var wrap in removableTypesInMember.Calcs) {
-                if (!RemoveItem(wrap)) continue;
-                simpData.RemovableCalcs.Add((CalcStmt) wrap.Removable);
-            }
-            foreach (var wrap in removableTypesInMember.Asserts) {
-                var simplifiedItem = SimplifyItem(wrap);
-                if (simplifiedItem == null) continue;
-                simpData.SimplifiedAsserts.Add(new Tuple<AssertStmt, AssertStmt>((AssertStmt) simplifiedItem.Item1, (AssertStmt) simplifiedItem.Item2));
-            }
-            foreach (var wrap in removableTypesInMember.Invariants) {
-                var simplifiedItem = SimplifyItem(wrap);
-                if (simplifiedItem == null) continue;
-                simpData.SimplifiedInvariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>(simplifiedItem.Item1, simplifiedItem.Item2));
-            }
+            var simpData = new SimplificationData();
+            simpData.RemovableAsserts.AddRange(RemoveItems(removableTypesInMember.Asserts));
+            simpData.RemovableInvariants.AddRange(RemoveItems(removableTypesInMember.Invariants));
+            simpData.RemovableDecreases.AddRange(RemoveItems(removableTypesInMember.Decreases));
+            simpData.RemovableLemmaCalls.AddRange(RemoveItems(removableTypesInMember.LemmaCalls));
+            simpData.SimplifiedAsserts.AddRange(SimplifyItems(removableTypesInMember.Asserts));
+            simpData.SimplifiedInvariants.AddRange(SimplifyItems(removableTypesInMember.Invariants));
             var calcLines = new List<Expression>();
             var calcBlocks = new List<BlockStmt>();
             var calcOps = new List<CalcStmt.CalcOp>();
 
             foreach (var wrap in removableTypesInMember.Calcs) {
-                var simplifiedItem = SimplifyCalc((CalcStmt)wrap.Removable);
+                var simplifiedItem = SimplifyCalc((CalcStmt) wrap.Removable);
                 if (simplifiedItem == null) continue;
                 calcLines.AddRange(simplifiedItem.Item1);
                 calcBlocks.AddRange(simplifiedItem.Item2);
@@ -499,6 +489,32 @@ namespace shorty
             }
             simpData.SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(calcLines, calcBlocks, calcOps);
             return simpData;
+        }
+
+        private List<T> RemoveItems<T>(List<Wrap<T>> wraps)
+        {
+            var removables = new List<T>();
+            for (var i = wraps.Count - 1; i >= 0; i--) {
+                var wrap = wraps[i];
+                if (!RemoveItem(wrap)) continue;
+                removables.Add(wrap.Removable);
+                wraps.Remove(wrap);
+            }
+            return removables;
+        }
+
+        private List<Tuple<T, T>> SimplifyItems<T>(List<Wrap<T>> wraps)
+        {
+            var simplifiedItems = new List<Tuple<T, T>>();
+            for (var i = wraps.Count - 1; i >= 0; i--) {
+                var wrap = wraps[i];
+                var simplifiedItem = SimplifyItem(wrap);
+                if (simplifiedItem == null) continue;
+                simplifiedItems.Add(simplifiedItem);
+                wraps.Remove(wrap);
+                wraps.Add(new Wrap<T>(simplifiedItem.Item2, wrap.ParentList));
+            }
+            return simplifiedItems;
         }
 
         private bool RemoveItem<T>(Wrap<T> wrap)
@@ -512,9 +528,9 @@ namespace shorty
             return worked;
         }
 
-        private Tuple<T,T> SimplifyItem<T>(Wrap<T> wrap)
+        private Tuple<T, T> SimplifyItem<T>(Wrap<T> wrap)
         {
-            Simplifier simplifier = new Simplifier(_program);
+            var simplifier = new Simplifier(_program);
             var simplifiedWraps = simplifier.TrySimplifyItem(wrap);
             if (simplifiedWraps == null) return null;
             return new Tuple<T, T>(simplifiedWraps.Item1.Removable, simplifiedWraps.Item2.Removable);
@@ -522,11 +538,211 @@ namespace shorty
 
         private Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifyCalc(CalcStmt calc)
         {
-            CalcRemover calcRemover = new CalcRemover(_program);
+            var calcRemover = new CalcRemover(_program);
             return calcRemover.RemoveFromCalc(calc);
         }
+    }
 
-        
+    class SimplificationItemInMethod
+    {
+        private enum Item
+        {
+            Assert,
+            Invariant,
+            Decreases,
+            LemmaCall,
+            Calc
+        }
+
+        private readonly Item _item;
+        public MemberDecl Member;
+        private Wrap<Statement> _assert;
+        private Wrap<Statement> _lemmaCall;
+        private Wrap<Statement> _calcs;
+        private Wrap<MaybeFreeExpression> _invariant;
+        private Wrap<Expression> _decreases;
+
+        public SimplificationItemInMethod(MemberDecl member, Wrap<Statement> statement)
+        {
+            if (statement.Removable is AssertStmt) {
+                _assert = statement;
+                _item = Item.Assert;
+            }
+            else if (statement.Removable is UpdateStmt) {
+                _lemmaCall = statement;
+                _item = Item.LemmaCall;
+            }
+            else if (statement.Removable is CalcStmt) {
+                _calcs = statement;
+                _item = Item.Calc;
+            }
+            Member = member;
+        }
+
+        public SimplificationItemInMethod(MemberDecl member, Wrap<MaybeFreeExpression> invariant)
+        {
+            _invariant = invariant;
+            _item = Item.Invariant;
+            Member = member;
+        }
+
+        public SimplificationItemInMethod(MemberDecl member, Wrap<Expression> deceases)
+        {
+            _decreases = deceases;
+            _item = Item.Decreases;
+            Member = member;
+        }
+
+        public object GetItem()
+        {
+            switch (_item) {
+                case Item.Assert:
+                    return _assert;
+                case Item.Invariant:
+                    return _invariant;
+                case Item.Decreases:
+                    return _decreases;
+                case Item.Calc:
+                    return _calcs;
+                case Item.LemmaCall:
+                    return _lemmaCall;
+                default:
+                    throw new Exception("item enum not found!");
+            }
+        }
+    }
+
+    class SimultaneousAllTypeMethodRemover : VerificationErrorInformationRetriever
+    {
+        private readonly Program _program;
+        private int _index = 0;
+        private Dictionary<MemberDecl, SimplificationItemInMethod> _removedItemsOnRun = new Dictionary<MemberDecl, SimplificationItemInMethod>();
+        private List<MemberDecl> _alreadyReAddedMembers = new List<MemberDecl>();
+
+        public SimultaneousAllTypeMethodRemover(Program program)
+        {
+            _program = program;
+        }
+
+        public override void ErrorInformation(ErrorInformation errorInfo)
+        {
+            MemberDecl member = null;
+            try {
+                member = FindMethod(errorInfo.Tok.pos, _removedItemsOnRun.Keys, _alreadyReAddedMembers);
+            }
+            catch (AlreadyRemovedException) {
+                return;
+            }
+            catch (Exception) {
+                throw new Exception("Could not find member");
+            }
+
+            if (member == null) return;
+            var item = _removedItemsOnRun[member].GetItem();
+            var wrap = item as Wrap<object>;
+            if (wrap != null) {
+                wrap.Reinsert();
+            }
+
+            _alreadyReAddedMembers.Add(member);
+            _removedItemsOnRun.Remove(member);
+        }
+
+        public SimplificationData Remove(Program program, AllRemovableTypes allRemovableTypes)
+        {
+            var objectWraps = new Dictionary<MemberDecl, List<SimplificationItemInMethod>>();
+            foreach (var member in allRemovableTypes.RemovableTypesInMethods.Keys) {
+                var removableTypeInMethod = allRemovableTypes.RemovableTypesInMethods[member];
+                var itemsInMethod = removableTypeInMethod.Asserts.Select(item => new SimplificationItemInMethod(member, item)).ToList();
+                itemsInMethod.AddRange(removableTypeInMethod.Invariants.Select(item => new SimplificationItemInMethod(member, item)));
+                itemsInMethod.AddRange(removableTypeInMethod.Decreases.Select(item => new SimplificationItemInMethod(member, item)));
+                itemsInMethod.AddRange(removableTypeInMethod.LemmaCalls.Select(item => new SimplificationItemInMethod(member, item)));
+                itemsInMethod.AddRange(removableTypeInMethod.Calcs.Select(item => new SimplificationItemInMethod(member, item)));
+                objectWraps.Add(member, itemsInMethod);
+            }
+            return Remove(program, objectWraps);
+        }
+
+//        public void Remove(Program program, Dictionary<MemberDecl, List<Wrap<object>>> memberWrapDictionary) {}
+
+        public SimplificationData Remove(Program program, Dictionary<MemberDecl, List<SimplificationItemInMethod>> simpItems)
+        {
+            bool finished = false;
+            SimplificationData simpData = new SimplificationData();
+            while (!finished) {
+                finished = RemoveAnItemFromEachMethod(simpItems);
+                _index++;
+                VerifyProgram();
+                GatherSimpData(simpData);
+                Reset();
+            }
+            return simpData;
+        }
+
+        private void Reset()
+        {
+            _alreadyReAddedMembers = new List<MemberDecl>();
+            _removedItemsOnRun = new Dictionary<MemberDecl, SimplificationItemInMethod>();
+
+        }
+
+        private void GatherSimpData(SimplificationData simpData)
+        {
+            //everything still in itemsRemoved should be used for return
+            foreach (var simplificationItemInMethod in _removedItemsOnRun.Values) {
+                var item = simplificationItemInMethod.GetItem();
+                if (item is Wrap<Statement>) {
+                    var wrap = (Wrap<Statement>) item;
+                    if (wrap.Removable is AssertStmt)
+                        simpData.RemovableAsserts.Add((AssertStmt) wrap.Removable);
+
+                    else if (wrap.Removable is UpdateStmt)
+
+                        simpData.RemovableLemmaCalls.Add((UpdateStmt) wrap.Removable);
+
+                    else if (wrap.Removable is CalcStmt)
+                        simpData.RemovableCalcs.Add((CalcStmt) wrap.Removable);
+
+                    else
+                        throw new Exception("Cannot match removable statement to removable type");
+                }
+                else if (item is Wrap<MaybeFreeExpression>) {
+                    var wrap = (Wrap<MaybeFreeExpression>) item;
+                    simpData.RemovableInvariants.Add(wrap.Removable);
+                }
+                else if (item is Wrap<Expression>) {
+                    var wrap = (Wrap<Expression>) item;
+                    simpData.RemovableDecreases.Add(wrap.Removable);
+                }
+                else {
+                    throw new Exception("Cannot match removed object to removable type");
+                }
+
+            }
+            
+        }
+
+        private bool RemoveAnItemFromEachMethod(Dictionary<MemberDecl, List<SimplificationItemInMethod>> simpItems)
+        {
+            var finished = true;
+            foreach (var member in simpItems.Keys) {
+                var simpsInMethod = simpItems[member];
+                if (!(_index < simpsInMethod.Count)) continue;
+                var item = simpsInMethod[_index].GetItem();
+                if (item is Wrap<Statement>) {
+                    ((Wrap<Statement>) item).Remove();
+                }
+                _removedItemsOnRun.Add(member, simpsInMethod[_index]);
+                finished = false;
+            }
+            return finished;
+        }
+
+        private void VerifyProgram()
+        {
+            var verifier = new SimpleVerifier();
+            verifier.IsProgramValid(_program, ErrorInformation);
+        }
     }
 
     class AlreadyRemovedException : Exception {}
@@ -548,7 +764,7 @@ namespace shorty
             var simplifiedItems = new List<Tuple<Wrap<T>, Wrap<T>>>();
             foreach (var wrap in itemWraps) {
                 var simplifiedItem = TrySimplifyItem(wrap);
-                if(simplifiedItem==null) continue;
+                if (simplifiedItem == null) continue;
                 simplifiedItems.Add(simplifiedItem);
             }
             return simplifiedItems;
@@ -558,7 +774,7 @@ namespace shorty
         {
             var binExpr = GetExpr(wrap.Removable) as BinaryExpr;
             if (binExpr != null)
-                if (binExpr.Op != BinaryExpr.Opcode.And ) return null; //TODO simplify when theres an implies
+                if (binExpr.Op != BinaryExpr.Opcode.And) return null; //TODO simplify when theres an implies
 
             wrap.Remove();
             if (!_verifier.IsProgramValid(_program)) {
@@ -589,7 +805,7 @@ namespace shorty
             //If nothing was removed, reinsert the original to its parent
             if (!itemRemoved) {
                 wrap.Reinsert();
-                return null;    
+                return null;
             }
 
             var brokenItems = new List<T>();
@@ -607,7 +823,7 @@ namespace shorty
 
             //Test quickly
             var ver = new SimpleVerifier();
-            if(!ver.IsProgramValid(_program)) throw new Exception("Failed to verify after combining items!");
+            if (!ver.IsProgramValid(_program)) throw new Exception("Failed to verify after combining items!");
 
             return new Tuple<Wrap<T>, Wrap<T>>(wrap, newWrap);
         }
@@ -631,8 +847,8 @@ namespace shorty
             }
             var newItem1 = GetNewNodeFromExpr(wrap, binaryExpr, binaryExpr.E0);
             var newItem2 = GetNewNodeFromExpr(wrap, binaryExpr, binaryExpr.E1);
-            if(newItem1 != null) brokenItems.AddRange(BreakDownExpr(newItem1));
-            if(newItem2 != null) brokenItems.AddRange(BreakDownExpr(newItem2));
+            if (newItem1 != null) brokenItems.AddRange(BreakDownExpr(newItem1));
+            if (newItem2 != null) brokenItems.AddRange(BreakDownExpr(newItem2));
             return brokenItems;
         }
 
@@ -653,7 +869,7 @@ namespace shorty
         {
             var assert = originalWrap.Removable as AssertStmt;
             if (assert != null) {
-                return new Wrap<T>((T)(object) new AssertStmt(binExpr.tok, assert.EndTok, subExpr, assert.Attributes), originalWrap.ParentList);
+                return new Wrap<T>((T) (object) new AssertStmt(binExpr.tok, assert.EndTok, subExpr, assert.Attributes), originalWrap.ParentList);
             }
             var invariant = originalWrap.Removable as MaybeFreeExpression;
             if (invariant != null) {
@@ -675,23 +891,19 @@ namespace shorty
             var right = CombineItems(brokenItems);
 
 
-
             var binExpr = new BinaryExpr(left.tok, BinaryExpr.Opcode.And, left, right);
             return binExpr;
-
-//            var newNode = GetNewNodeFromItem(brokenItems[0], binExpr);
-//            return new Wrap<T>(newNode, item.ParentList);
         }
 
         private T GetNewNodeFromItem<T>(T originalItem, Expression expr)
         {
             var assert = originalItem as AssertStmt;
             if (assert != null) {
-                return (T)(object)new AssertStmt(assert.Tok, assert.EndTok, expr, assert.Attributes);
+                return (T) (object) new AssertStmt(assert.Tok, assert.EndTok, expr, assert.Attributes);
             }
             var invariant = originalItem as MaybeFreeExpression;
             if (invariant != null) {
-                return (T)(object)new MaybeFreeExpression(expr);
+                return (T) (object) new MaybeFreeExpression(expr);
             }
             throw new Exception("cant create a node from the item!");
         }

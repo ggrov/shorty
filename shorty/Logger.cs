@@ -100,11 +100,11 @@ namespace shorty
 
         private void LogFile(string fileName, string itemsName, ILogFinderFactory logFinderFactory)
         {
-            string fullFileName = _directory + fileName + ".csv";
+            var fullFileName = _directory + fileName + ".csv";
             using (TextWriter tw = File.CreateText(fullFileName))
             {
                 WriteHeadings(tw, itemsName);
-                int count = 1;
+                var count = 1;
                 var data = new List<Tuple<string, int, int, float, float, float>>();
                 foreach (var program in Programs)
                 {
@@ -441,7 +441,7 @@ namespace shorty
             RemoveAllOfType(shorty); //we do not want theese here - this will take a bit of time but is needed for accurate results
             var initialAmount = CountSubExprsFromItems(shorty);
             Simplify(shorty);
-            int after = CountSubExprsFromItems(shorty);
+            var after = CountSubExprsFromItems(shorty);
             var amount = initialAmount - after;
             return amount;
         }
