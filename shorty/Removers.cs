@@ -19,51 +19,46 @@ namespace shorty
 {
     internal class SimpleVerifier
     {
-        public void BoogieErrorInformation(Microsoft.Boogie.ErrorInformation errorInfo) {}
-
-        private Program CloneProgram(Program program)
-        {
-            var cloner = new Cloner();
-            var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
-            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReporter());
-        }
+        public void BoogieErrorInformation(ErrorInformation errorInfo) {}
 
         public bool IsProgramValid(Program program)
         {
             return IsProgramValid(program, null);
         }
 
-        public bool IsProgramValid(Program program, Microsoft.Boogie.ErrorReporterDelegate errorDelegate)
+        public bool IsProgramValid(Program program, ErrorReporterDelegate errorDelegate)
         {
             try {
-                var programId = "main_program_id";
-                var stats = new Microsoft.Boogie.PipelineStatistics();
-                var translator = new Translator(new InvisibleErrorReporter());
-                var programCopy = CloneProgram(program);
-                var resolver = new Resolver(programCopy);
-                resolver.ResolveProgram(programCopy);
-                var boogieProgram = translator.Translate(programCopy);
-                var bplFileName = "bplFile";
-                Microsoft.Boogie.LinearTypeChecker ltc;
-                Microsoft.Boogie.CivlTypeChecker ctc;
-
-                var oc = Microsoft.Boogie.ExecutionEngine.ResolveAndTypecheck(boogieProgram, bplFileName, out ltc, out ctc);
-                if (oc != Microsoft.Boogie.PipelineOutcome.ResolvedAndTypeChecked) return false;
-
-                Microsoft.Boogie.ExecutionEngine.EliminateDeadVariables(boogieProgram);
-                Microsoft.Boogie.ExecutionEngine.CollectModSets(boogieProgram);
-                Microsoft.Boogie.ExecutionEngine.CoalesceBlocks(boogieProgram);
-                Microsoft.Boogie.ExecutionEngine.Inline(boogieProgram);
-
-                oc = Microsoft.Boogie.ExecutionEngine.InferAndVerify(boogieProgram, stats, programId, errorDelegate);
-                var allOk = stats.ErrorCount == 0 && stats.InconclusiveCount == 0 && stats.TimeoutCount == 0 && stats.OutOfMemoryCount == 0;
-                //Console.WriteLine(allOk ? "Verification Successful" : "Verification failed");
-                return oc == Microsoft.Boogie.PipelineOutcome.VerificationCompleted && allOk;
+                return TryValidateProgram(program, errorDelegate);
             }
             catch (Exception) {
-                //Console.WriteLine("Verification failed: " + e.Message);
                 return false;
             }
+        }
+
+        private static bool TryValidateProgram(Program program, ErrorReporterDelegate errorDelegate)
+        {
+            var translator = new Translator(new InvisibleErrorReporter());
+            var programCopy = SimpleCloner.CloneProgram(program);
+            var resolver = new Resolver(programCopy);
+            resolver.ResolveProgram(programCopy);
+            var boogieProgram = translator.Translate(programCopy);
+            var stats = new PipelineStatistics();
+            var programId = "main_program_id";
+            var bplFileName = "bplFile";
+            LinearTypeChecker ltc;
+            CivlTypeChecker ctc;
+
+            var oc = ExecutionEngine.ResolveAndTypecheck(boogieProgram, bplFileName, out ltc, out ctc);
+            if (oc != PipelineOutcome.ResolvedAndTypeChecked) return false;
+            ExecutionEngine.EliminateDeadVariables(boogieProgram);
+            ExecutionEngine.CollectModSets(boogieProgram);
+            ExecutionEngine.CoalesceBlocks(boogieProgram);
+            ExecutionEngine.Inline(boogieProgram);
+
+            oc = ExecutionEngine.InferAndVerify(boogieProgram, stats, programId, errorDelegate);
+            var allOk = stats.ErrorCount == 0 && stats.InconclusiveCount == 0 && stats.TimeoutCount == 0 && stats.OutOfMemoryCount == 0;
+            return oc == PipelineOutcome.VerificationCompleted && allOk;
         }
     }
 
@@ -118,11 +113,7 @@ namespace shorty
 
         public static List<T> GetRemovables(List<Wrap<T>> wrapList)
         {
-            var removables = new List<T>();
-            foreach (var wrap in wrapList) {
-                removables.Add(wrap.Removable);
-            }
-            return removables;
+            return wrapList.Select(wrap => wrap.Removable).ToList();
         }
     }
 
@@ -149,9 +140,13 @@ namespace shorty
 
     public class CalcRemover
     {
+        private readonly Program _program;
         private readonly SimpleVerifier _verifier = new SimpleVerifier();
 
-        private readonly Program _program;
+        private List<Expression> _removableLines = new List<Expression>();
+        private List<BlockStmt> _removableHints = new List<BlockStmt>();
+        private List<CalcStmt.CalcOp> _removableOps = new List<CalcStmt.CalcOp>();
+        private List<CalcStmt> _removableCalcStmts = new List<CalcStmt>();
 
         public CalcRemover(Program program)
         {
@@ -160,71 +155,77 @@ namespace shorty
 
         public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>> Remove(Dictionary<MemberDecl, List<Wrap<Statement>>> memberWrapDictionary)
         {
-            var removableLines = new List<Expression>();
-            var removableHints = new List<BlockStmt>();
-            var removableOps = new List<CalcStmt.CalcOp>();
-            var removableCalcStmts = new List<CalcStmt>();
-            foreach (var calcList in memberWrapDictionary.Values) {
-                foreach (var calcWrap in calcList) {
-                    var remover = new OneAtATimeRemover(_program);
-                    if (remover.TryRemove(calcWrap)) {
-                        removableCalcStmts.Add((CalcStmt) calcWrap.Removable);
-                        continue;
-                    }
-                    var calcResults = RemoveFromCalc((CalcStmt) calcWrap.Removable);
-                    removableLines.AddRange(calcResults.Item1);
-                    removableHints.AddRange(calcResults.Item2);
-                    removableOps.AddRange(calcResults.Item3);
-                }
-            }
-            return new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>>(removableLines, removableHints, removableOps, removableCalcStmts);
+            foreach (var calcList in memberWrapDictionary.Values)
+                RemoveCalcsInMethod(calcList);
+            var removableCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>>(_removableLines, _removableHints, _removableOps, _removableCalcStmts);
+            Reset();
+            return removableCalcs;
         }
 
-        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> RemoveFromCalc(CalcStmt calc)
+        private void RemoveCalcsInMethod(List<Wrap<Statement>> calcList)
         {
-            var removableLines = new List<Expression>();
-            var removableHints = new List<BlockStmt>();
-            var removableOps = new List<CalcStmt.CalcOp>();
-            var stepOps = calc.StepOps;
-            var lines = calc.Lines;
-            var hints = calc.Hints;
+            foreach (var calcWrap in calcList)
+                RemoveCalc(calcWrap);
+        }
 
-            //find lines and associated hints that can be removed
-            // We don't want to touch the last two (dummy and last item)
-            for (var i = 1; i < lines.Count - 2; i++) {
-                var line = lines[i];
-                for (var j = 0; j < hints.Count; j++) {
-                    var hint = hints[j];
-                    var stepOp = stepOps[j];
-                    if (!TryRemove(new Wrap<Expression>(line, lines), new Wrap<BlockStmt>(hint, hints), new Wrap<CalcStmt.CalcOp>(stepOp, stepOps))) continue;
-                    i--; //We have to go back one as a line has been removed all following ones will be moved back aswell
-                    removableLines.Add(line);
-                    removableOps.Add(stepOp);
-                    if (hint.Body.Count > 0) //Don't need to return hints that are already "invisible"
-                        removableHints.Add(hint);
+        private void RemoveCalc(Wrap<Statement> calcWrap)
+        {
+            var remover = new OneAtATimeRemover(_program);
+            if (remover.TryRemove(calcWrap)) {
+                _removableCalcStmts.Add((CalcStmt) calcWrap.Removable);
+                return;
+            }
+            SimplifyCalc((CalcStmt) calcWrap.Removable);
+        }
+
+       public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifyCalc(CalcStmt calc)
+        {
+            RemoveLinesAndHints(calc);
+            RemoveOtherHints(calc);
+           return new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(_removableLines, _removableHints, _removableOps);
+        }
+
+        private void RemoveOtherHints(CalcStmt calc)
+        {
+            foreach (var hint in calc.Hints)
+                CleanOutHint(hint);
+        }
+
+        private void CleanOutHint(BlockStmt hint)
+        {
+            if (hint.Body.Count == 0) return;
+            var body = new List<Statement>();
+            CloneTo(hint.Body, body);
+            // empty the body - have to do it this way as it is readonly
+            for (var i = 0; i < hint.Body.Count; i++) {
+                var item = hint.Body[i];
+                hint.Body.Remove(item);
+            }
+            if (_verifier.IsProgramValid(_program))
+                _removableHints.Add(hint);
+            else
+                CloneTo(body, hint.Body);
+        }
+
+        private void RemoveLinesAndHints(CalcStmt calc)
+        {
+            // -2 as We don't want to touch the last two lines(dummy and last item)
+            for (var i = 1; i < calc.Lines.Count - 2; i++) {
+                var line = calc.Lines[i];
+                for (var j = 0; j < calc.Hints.Count; j++) {
+                    var hint = calc.Hints[j];
+                    var stepOp = calc.StepOps[j];
+                    if (!TryRemove(new Wrap<Expression>(line, calc.Lines), new Wrap<BlockStmt>(hint, calc.Hints), new Wrap<CalcStmt.CalcOp>(stepOp, calc.StepOps))) continue;
+                    //Have to go back one as a line has been removed
+                    i--;
+                    _removableLines.Add(line);
+                    _removableOps.Add(stepOp);
+                    //Don't need to return hints that are already "invisible"
+                    if (hint.Body.Count > 0) 
+                        _removableHints.Add(hint);
                     break;
                 }
             }
-
-            //find other hints that can be removed
-            foreach (var hint in hints) {
-                if (hint.Body.Count == 0) continue;
-                var body = new List<Statement>();
-                CloneTo(hint.Body, body);
-                //emptyTheBody - have to do it this way as it is readonly
-                for (var i = 0; i < hint.Body.Count; i++) {
-                    var item = hint.Body[i];
-                    hint.Body.Remove(item);
-                }
-                if (_verifier.IsProgramValid(_program)) {
-                    removableHints.Add(hint);
-                }
-                else {
-                    CloneTo(body, hint.Body);
-                }
-            }
-
-            return new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(removableLines, removableHints, removableOps);
         }
 
         public static void CloneTo(List<Statement> listToClone, List<Statement> listToCloneInto)
@@ -250,13 +251,20 @@ namespace shorty
             line.ParentList.Remove(line.Removable);
             hint.ParentList.Remove(hint.Removable);
             op.ParentList.Remove(op.Removable);
-            if (_verifier.IsProgramValid(_program))
-                return true;
+            if (_verifier.IsProgramValid(_program)) return true;
             line.ParentList.Insert(lineIndex, line.Removable);
             hint.ParentList.Insert(hintIndex, hint.Removable);
             op.ParentList.Insert(opIndex, op.Removable);
             //TODO: try and remove everything inside the hint
             return false;
+        }
+
+        public void Reset()
+        {
+            _removableHints = new List<BlockStmt>();
+            _removableCalcStmts = new List<CalcStmt>();
+            _removableLines = new List<Expression>();
+            _removableOps = new List<CalcStmt.CalcOp>();
         }
     }
 
@@ -642,7 +650,7 @@ namespace shorty
         private Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifyCalc(CalcStmt calc)
         {
             var calcRemover = new CalcRemover(_program);
-            return calcRemover.RemoveFromCalc(calc);
+            return calcRemover.SimplifyCalc(calc);
         }
     }
 
