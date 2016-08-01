@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.Contracts;
 using System.IO;
+using System.Linq;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 
@@ -81,12 +82,8 @@ namespace shorty
 
         public SimplificationData FastRemoveAllRemovables()
         {
-            var simpData = new SimplificationData();
-
-            SimultaneousAllTypeMethodRemover remover = new SimultaneousAllTypeMethodRemover(Program);
-
-            simpData = remover.Remove(Program, _allRemovableTypes);
-
+            var remover = new SimultaneousAllTypeMethodRemover(Program);
+            var simpData = remover.Remove(Program, _allRemovableTypes);
             return simpData;
         }
 
@@ -112,55 +109,18 @@ namespace shorty
                 _allRemovableTypes.RemoveDecreases(removableDecrease);
             }
             //We also have to find removable wildcards which are stored differently
+            WildCardDecreasesRemover wcdRemover = new WildCardDecreasesRemover(Program);
+            var wildCardDecreases = wcdRemover.FindRemovableWildCards(_allRemovableTypes.WildCardDecreaseses.ToList());
             var expressions = Wrap<Expression>.GetRemovables(removableDecreases);
-            expressions.AddRange(FindRemovableWildCards());
+
+            foreach (var wildCardDecrease in wildCardDecreases) {
+                _allRemovableTypes.RemoveWildCardDecreases(wildCardDecrease);
+                expressions.Add(wildCardDecrease.Expression);
+            }
             return expressions;
         }
 
-        private List<Expression> FindRemovableWildCards()
-        {
-            var removableWildCards = new List<Expression>();
-            foreach (var wcDecreases in _allRemovableTypes.WildCardDecreaseses)
-                removableWildCards.AddRange(FindRemovableWildCards(wcDecreases).Item1);
-            return removableWildCards;
-        }
 
-        private Tuple<List<Expression>, bool> FindRemovableWildCards(WildCardDecreases currentWildCardDecreases)
-        {
-            var removableWildCards = new List<Expression>();
-            var safeToRemove = true;
-            RemoveWildCardSubDecreases(currentWildCardDecreases, removableWildCards, ref safeToRemove);
-
-            if (safeToRemove)
-                RemoveWildCardDecreases(currentWildCardDecreases, removableWildCards, ref safeToRemove);
-
-            return new Tuple<List<Expression>, bool>(removableWildCards, safeToRemove);
-        }
-
-        private void RemoveWildCardDecreases(WildCardDecreases currentWildCardDecreases, List<Expression> removableWildCards, ref bool safeToRemove)
-        {
-            var index = currentWildCardDecreases.ParentSpecification.Expressions.IndexOf(currentWildCardDecreases.Expression);
-            currentWildCardDecreases.ParentSpecification.Expressions.Remove(currentWildCardDecreases.Expression);
-            if (IsProgramValid()) {
-                removableWildCards.Add(currentWildCardDecreases.Expression);
-                if (currentWildCardDecreases.ParentWildCardDecreases == null)
-                    _allRemovableTypes.RemoveWildCardDecreases(currentWildCardDecreases);
-            }
-            else {
-                currentWildCardDecreases.ParentSpecification.Expressions.Insert(index, currentWildCardDecreases.Expression);
-                safeToRemove = false;
-            }
-        }
-
-        private void RemoveWildCardSubDecreases(WildCardDecreases wcd, List<Expression> removableWildCards, ref bool safeToRemove)
-        {
-            foreach (var subDec in wcd.SubDecreases) {
-                var removableWCs = FindRemovableWildCards(subDec);
-                removableWildCards.AddRange(removableWCs.Item1);
-                if (safeToRemove)
-                    safeToRemove = removableWCs.Item2;
-            }
-        }
 
         #endregion
 

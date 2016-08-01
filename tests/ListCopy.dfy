@@ -33,7 +33,7 @@ class Node {
         invariant (forall o: Node :: o in newRegion ==> o != null) && (forall o: Node :: o in newRegion && o.nxt != null ==> o.nxt in newRegion);
         invariant prev in newRegion;
         invariant fresh(newRegion);
-        //invariant newRegion !! existingRegion;
+        invariant newRegion !! existingRegion;
         decreases *;  // omit loop termination check
       {
         var tmp := new Node.Init();

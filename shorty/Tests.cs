@@ -84,10 +84,23 @@ namespace shorty
             var program = GetProgram("Combinators.dfy");
             var shorty = GetShorty(program);
 
-            Assert.AreEqual(4, shorty.Decreases.Count + shorty.DecreasesWildCards.Count);
+            int count = shorty.Decreases.Count;
+            foreach (var wildCardDecreasese in shorty.DecreasesWildCards) {
+                count += wildCardDecreasese.Count;
+            }
+            Assert.AreEqual(5,count);
             Assert.AreEqual(1, shorty.FindRemovableDecreases().Count);
-            Assert.AreEqual(3, shorty.Decreases.Count + shorty.DecreasesWildCards.Count);
             Assert.True(shorty.IsProgramValid());
+             using (TextWriter tw = File.CreateText("H:\\dafny\\shorty.dfy")) {
+                shorty.PrintProgram(tw);
+            }
+
+             int newCount = shorty.Decreases.Count;
+             foreach (var wildCardDecreasese in shorty.DecreasesWildCards)
+             {
+                 newCount += wildCardDecreasese.Count;
+             }
+            Assert.AreEqual(4, newCount);
         }
 
         [Test]
@@ -162,7 +175,7 @@ namespace shorty
                 if (member.Name == "Copy") {
                     var methodRemover = new MethodRemover(program);
                     var removables = methodRemover.FullSimplify(member);
-                    Assert.AreEqual(1,removables.RemovableInvariants.Count);
+                    Assert.AreEqual(2,removables.RemovableInvariants.Count);
                     Assert.AreEqual(3,removables.RemovableAsserts.Count);
                     var verifier = new SimpleVerifier();
                     Assert.True(verifier.IsProgramValid(program));
@@ -175,12 +188,22 @@ namespace shorty
         {
             Initialise();
             var program = GetProgram("Streams.dfy");
-            var shorty = GetShorty(program);
+            var shorty = GetShorty(SimpleCloner.CloneProgram(program));
+            var shorty2 = GetShorty(program);
 
-            shorty.FastRemoveAllRemovables();
+            Assert.AreEqual(21, shorty.LemmaCalls.Count);
+            var data = shorty.FastRemoveAllRemovables();
+//            var shorty2Amount = shorty2.FindRemovableLemmaCalls();
 
-
-
+//            using (TextWriter tw = File.CreateText("H:\\dafny\\shorty.dfy")) {
+//                shorty.PrintProgram(tw);
+//            }
+//            using (TextWriter tw = File.CreateText("H:\\dafny\\shorty2.dfy")) {
+//                shorty2.PrintProgram(tw);
+//            }
+            Assert.AreEqual(17, data.RemovableLemmaCalls.Count);
+            Assert.AreEqual(4, shorty.LemmaCalls.Count);
+            Assert.True(shorty.IsProgramValid());
         }
 
         private List<MemberDecl> GetMembers(Program program)
@@ -190,7 +213,7 @@ namespace shorty
             return members;
         }
 
-        [Test][Ignore("Takes a very long time")]
+        [Test]//[Ignore("Takes a very long time")]
         public void ThouroughTestDifferentRemovals()
         {
             Initialise();
@@ -209,21 +232,37 @@ namespace shorty
 
             var oneAtATime = new Shorty(oneAtATimeProg, new OneAtATimeRemover(oneAtATimeProg));
             var simultaneous = new Shorty(simulProg, new SimultaneousMethodRemover(simulProg));
+            var allType = new Shorty(SimpleCloner.CloneProgram(program));
+            var allRemovableTypeResults = allType.FastRemoveAllRemovables();
 
-            Assert.AreEqual(oneAtATime.FindRemovableAsserts().Count, simultaneous.FindRemovableAsserts().Count);
-            Assert.AreEqual(oneAtATime.FindRemovableInvariants().Count, simultaneous.FindRemovableInvariants().Count);
-            Assert.AreEqual(oneAtATime.FindRemovableDecreases().Count, simultaneous.FindRemovableDecreases().Count);
-            Assert.AreEqual(oneAtATime.FindRemovableLemmaCalls().Count, simultaneous.FindRemovableLemmaCalls().Count);
+            var asserts = oneAtATime.FindRemovableAsserts();
+            Assert.AreEqual(asserts.Count, simultaneous.FindRemovableAsserts().Count);
+            Assert.AreEqual(asserts.Count, allRemovableTypeResults.RemovableAsserts.Count);
+
+            var invariants = oneAtATime.FindRemovableInvariants();
+            Assert.AreEqual(invariants.Count, simultaneous.FindRemovableInvariants().Count);
+            Assert.AreEqual(invariants.Count, allRemovableTypeResults.RemovableInvariants.Count);
+
+            var decreases = oneAtATime.FindRemovableDecreases();
+            Assert.AreEqual(decreases.Count, simultaneous.FindRemovableDecreases().Count);
+            Assert.AreEqual(decreases.Count, allRemovableTypeResults.RemovableDecreases.Count);
+
+            var lemmaCalls = oneAtATime.FindRemovableLemmaCalls();
+            Assert.AreEqual(lemmaCalls.Count, simultaneous.FindRemovableLemmaCalls().Count);
+            Assert.AreEqual(lemmaCalls.Count, allRemovableTypeResults.RemovableLemmaCalls.Count);
+
             var oaatRemovedCalcs = oneAtATime.FindRemovableCalcs();
             var simulRemovedCalcs = simultaneous.FindRemovableCalcs();
             Assert.AreEqual(oaatRemovedCalcs.Item1.Count, simulRemovedCalcs.Item1.Count);
             Assert.AreEqual(oaatRemovedCalcs.Item2.Count, simulRemovedCalcs.Item2.Count);
             Assert.AreEqual(oaatRemovedCalcs.Item3.Count, simulRemovedCalcs.Item3.Count);
             Assert.AreEqual(oaatRemovedCalcs.Item4.Count, simulRemovedCalcs.Item4.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, allRemovableTypeResults.RemovableCalcs.Count);
             Assert.AreEqual(oneAtATime.GetSimplifiedAsserts().Count, simultaneous.GetSimplifiedAsserts().Count);
             Assert.AreEqual(oneAtATime.GetSimplifiedInvariants().Count, simultaneous.GetSimplifiedInvariants().Count);
             Assert.True(oneAtATime.IsProgramValid());
             Assert.True(simultaneous.IsProgramValid());
+            Assert.True(allType.IsProgramValid());
         }
     }
 }
