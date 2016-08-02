@@ -290,25 +290,28 @@ namespace shorty
 
         private static void SimplifyAndPrintPrograms(List<Program> dafnyPrograms)
         {
-            foreach (var program in dafnyPrograms) {
-                Console.WriteLine("Simplifying " + program.Name);
-                try
-                {
-                    var shorty = new Shorty(program, new OneAtATimeRemover(program));
-                    shorty.FindRemovableAsserts();
-                    shorty.FindRemovableInvariants();
-                    shorty.FindRemovableDecreases();
-                    shorty.FindRemovableLemmaCalls();
-                    shorty.FindRemovableCalcs();
-                    shorty.GetSimplifiedAsserts();
-                    shorty.GetSimplifiedInvariants();
-                    using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\" + program.Name + ".txt"))
-                    {
-                        shorty.PrintProgram(writer);
-                    }
-                } catch(Exception e){
-                    Console.WriteLine(e.Message);
+            foreach (var program in dafnyPrograms)
+                SimplifyAndPrintProgram(program);
+        }
+
+        private static void SimplifyAndPrintProgram(Program program)
+        {
+            Console.WriteLine("Simplifying " + program.Name);
+            try {
+                var shorty = new Shorty(program, new OneAtATimeRemover(program));
+                shorty.FindRemovableAsserts();
+                shorty.FindRemovableInvariants();
+                shorty.FindRemovableDecreases();
+                shorty.FindRemovableLemmaCalls();
+                shorty.FindRemovableCalcs();
+                shorty.GetSimplifiedAsserts();
+                shorty.GetSimplifiedInvariants();
+                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\" + program.Name + ".txt")) {
+                    shorty.PrintProgram(writer);
                 }
+            }
+            catch (Exception e) {
+                Console.WriteLine(e.Message);
             }
         }
     }
