@@ -162,7 +162,7 @@ namespace shorty
         public void TestDifferentRemovals()
         {
             Initialise();
-            CompareAllRemovals(GetProgram("ListCopy.dfy"));
+            CompareAllRemovals(GetProgram("Combinators.dfy"));
         }
 
         [Test]
@@ -235,17 +235,27 @@ namespace shorty
             var allType = new Shorty(SimpleCloner.CloneProgram(program));
             var allRemovableTypeResults = allType.FastRemoveAllRemovables();
 
-            var asserts = oneAtATime.FindRemovableAsserts();
-            Assert.AreEqual(asserts.Count, simultaneous.FindRemovableAsserts().Count);
-            Assert.AreEqual(asserts.Count, allRemovableTypeResults.RemovableAsserts.Count);
-
-            var invariants = oneAtATime.FindRemovableInvariants();
-            Assert.AreEqual(invariants.Count, simultaneous.FindRemovableInvariants().Count);
-            Assert.AreEqual(invariants.Count, allRemovableTypeResults.RemovableInvariants.Count);
+//            var asserts = oneAtATime.FindRemovableAsserts();
+//            Assert.AreEqual(asserts.Count, simultaneous.FindRemovableAsserts().Count);
+//            Assert.AreEqual(asserts.Count, allRemovableTypeResults.RemovableAsserts.Count);
+//
+//            var invariants = oneAtATime.FindRemovableInvariants();
+//            Assert.AreEqual(invariants.Count, simultaneous.FindRemovableInvariants().Count);
+//            Assert.AreEqual(invariants.Count, allRemovableTypeResults.RemovableInvariants.Count);
 
             var decreases = oneAtATime.FindRemovableDecreases();
             Assert.AreEqual(decreases.Count, simultaneous.FindRemovableDecreases().Count);
-            Assert.AreEqual(decreases.Count, allRemovableTypeResults.RemovableDecreases.Count);
+            var all = allRemovableTypeResults.RemovableDecreases;
+            using (TextWriter tw = File.CreateText("H:\\dafny\\oaat.dfy"))
+            {
+                oneAtATime.PrintProgram(tw);
+            }
+            using (TextWriter tw = File.CreateText("H:\\dafny\\allType.dfy"))
+            {
+                allType.PrintProgram(tw);
+            }
+            Assert.True(allType.IsProgramValid());
+            Assert.AreEqual(decreases.Count, all.Count);
 
             var lemmaCalls = oneAtATime.FindRemovableLemmaCalls();
             Assert.AreEqual(lemmaCalls.Count, simultaneous.FindRemovableLemmaCalls().Count);
@@ -261,8 +271,8 @@ namespace shorty
             Assert.AreEqual(oneAtATime.GetSimplifiedAsserts().Count, simultaneous.GetSimplifiedAsserts().Count);
             Assert.AreEqual(oneAtATime.GetSimplifiedInvariants().Count, simultaneous.GetSimplifiedInvariants().Count);
             Assert.True(oneAtATime.IsProgramValid());
-            Assert.True(simultaneous.IsProgramValid());
-            Assert.True(allType.IsProgramValid());
+            Assert.True(simultaneous.IsProgramValid());           
+            
         }
     }
 }

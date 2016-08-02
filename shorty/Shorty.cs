@@ -83,7 +83,7 @@ namespace shorty
         public SimplificationData FastRemoveAllRemovables()
         {
             var remover = new SimultaneousAllTypeMethodRemover(Program);
-            var simpData = remover.Remove(Program, _allRemovableTypes);
+            var simpData = remover.Remove(_allRemovableTypes);
             return simpData;
         }
 
