@@ -880,6 +880,7 @@ namespace shorty
             RemoveExtraWildCardDecreases(wildCards);
             if (wildCards[0].Simplified) {
                 _allRemovableTypes.RemoveWildCardDecreases(wildCards[0]);
+                SimplifyItems(member);
                 return;
             }
             RemoveWildCard(wildCards[0], member);
@@ -915,6 +916,43 @@ namespace shorty
             wildCard.Simplified = true;
             
         }
+
+        private Dictionary<MemberDecl, int[]> _simpIndex; //TODO: tuple so brokenItems can be stored
+        private void SimplifyItems(MemberDecl member)
+        {
+            if(_simpIndex[member] == null)
+                _simpIndex[member] = new int[2] {0,0};
+            List<Wrap<Statement>> asserts = _allRemovableTypes.RemovableTypesInMethods[member].Asserts;
+            List<Wrap<MaybeFreeExpression>> invariants = _allRemovableTypes.RemovableTypesInMethods[member].Invariants;
+            var index = _simpIndex[member][0];
+            if (index > asserts.Count + invariants.Count) return;
+//            _simpIndex[member].Item1 = _simpIndex[member].Item1 + 1;
+
+            if (index < asserts.Count) {
+                SimplifyItem(asserts[index]);
+            }
+            else {
+                SimplifyItem(invariants[asserts.Count-index]);
+            }
+            
+            
+        }
+
+        private void SimplifyItem<T>(Wrap<T> wrap)
+        {
+            Simplifier simplifier = new Simplifier(_program);
+
+            var brokenItems = simplifier.BreakDownExpr(wrap);
+
+            
+
+            var binExpr = Simplifier.GetExpr(wrap.Removable) as BinaryExpr;
+            if (binExpr != null)
+                if (binExpr.Op != BinaryExpr.Opcode.And) return; //TODO simplify when theres an implies
+
+            wrap.Remove();
+        }
+
 
         private void GatherSimpData(SimplificationWrapData simpData)
         {
@@ -1039,7 +1077,7 @@ namespace shorty
                 brokenItem.Remove();
         }
 
-        private Wrap<T> CreateNewItem<T>(Wrap<T> wrap, Expression newExpr)
+        public Wrap<T> CreateNewItem<T>(Wrap<T> wrap, Expression newExpr)
         {
             //Create a new item
             var newItem = GetNewNodeFromItem(wrap.Removable, newExpr);
@@ -1059,7 +1097,7 @@ namespace shorty
             return brokenItems;
         }
 
-        private List<Wrap<T>> BreakDownExpr<T>(Wrap<T> wrap)
+        public List<Wrap<T>> BreakDownExpr<T>(Wrap<T> wrap)
         {
             var brokenItems = new List<Wrap<T>>();
             var binaryExpr = GetExpr(wrap.Removable) as BinaryExpr;
@@ -1074,7 +1112,7 @@ namespace shorty
             return brokenItems;
         }
 
-        private Expression GetExpr<T>(T removable)
+        public static Expression GetExpr<T>(T removable)
         {
             var assert = removable as AssertStmt;
             if (assert != null) {
