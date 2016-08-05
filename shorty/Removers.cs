@@ -1,4 +1,5 @@
 using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics;
@@ -737,6 +738,17 @@ namespace shorty
         private Dictionary<MemberDecl, SimplificationItemInMethod> _removedItemsOnRun = new Dictionary<MemberDecl, SimplificationItemInMethod>();
         private Dictionary<MemberDecl, WildCardDecreases> _wildCardDecreasesRemovedOnRun = new Dictionary<MemberDecl, WildCardDecreases>();
 
+        
+
+        //The first tuple is the list of items in the method and the index for looking through the items;
+        //The second one is the original item, the broken items it creates and the index for indexing through the broken items
+        private readonly Dictionary<MemberDecl, Tuple<List<Tuple<SimplificationItemInMethod, List<SimplificationItemInMethod>>>,int[]>> _simpIndex =
+            new Dictionary<MemberDecl, Tuple<List<Tuple<SimplificationItemInMethod, List<SimplificationItemInMethod>>>, int[]>>();
+
+        //First list represents an item, sub list is all the broken expressions needed for it.
+        private readonly Dictionary<MemberDecl, Dictionary<SimplificationItemInMethod, List<SimplificationItemInMethod>>> requiredSubExpressions =
+            new Dictionary<MemberDecl, Dictionary<SimplificationItemInMethod, List<SimplificationItemInMethod>>>(); 
+
         public SimultaneousAllTypeMethodRemover(Program program)
         {
             _program = program;
@@ -748,7 +760,7 @@ namespace shorty
             if (member == null) return;
             
             if (_removedItemsOnRun.ContainsKey(member)) {
-                ReinsertItem(member);
+                ReinsertItemFromMember(member);
                 _removedItemsOnRun.Remove(member);
                 AlreadyReAddedMembers.Add(member);
             }
@@ -759,7 +771,21 @@ namespace shorty
                 AlreadyReAddedMembers.Add(member);
                 wildCard.CantBeRemoved = true;
             }
-            else {
+            else if (_simpIndex[member].Item2 != null) { //Reinsert the subexpression
+                var itemIndex = _simpIndex[member].Item2[0];
+                var brokenItemIndex = _simpIndex[member].Item2[1];
+                var brokenExpr = _simpIndex[member].Item1[itemIndex].Item2[brokenItemIndex];
+                var originalItem = _simpIndex[member].Item1[itemIndex].Item1;
+                ReinsertItem(brokenExpr.GetItem());
+                _simpIndex[member].Item2[1]++;
+                if(!requiredSubExpressions.ContainsKey(member))
+                    requiredSubExpressions.Add(member, new Dictionary<SimplificationItemInMethod, List<SimplificationItemInMethod>>());
+                if (!requiredSubExpressions[member].ContainsKey(originalItem))
+                    requiredSubExpressions[member].Add(originalItem, new List<SimplificationItemInMethod>());
+                requiredSubExpressions[member][originalItem].Add(brokenExpr);
+            }
+            else
+            {
                 throw new Exception("cant find member in removedOnRun");
             }
         }
@@ -780,9 +806,14 @@ namespace shorty
             }
         }
 
-        private void ReinsertItem(MemberDecl member)
+        private void ReinsertItemFromMember(MemberDecl member)
         {
             var item = _removedItemsOnRun[member].GetItem();
+            ReinsertItem(item);
+        }
+
+        private static void ReinsertItem(object item)
+        {
             if (item is Wrap<Statement>) {
                 ((Wrap<Statement>) item).Reinsert();
             }
@@ -876,11 +907,14 @@ namespace shorty
         private void FindRemoveableWildCards(MemberDecl member)
         {
             var wildCards = _allRemovableTypes.RemovableTypesInMethods[member].WildCardDecreaseses;
-            if (wildCards.Count < 1) return;
+            if (wildCards.Count < 1) {
+                SimplifyItems(member); //Because all the wildcards are done we now move to conjunction simplification
+                return;
+            }
             RemoveExtraWildCardDecreases(wildCards);
             if (wildCards[0].Simplified) {
                 _allRemovableTypes.RemoveWildCardDecreases(wildCards[0]);
-                SimplifyItems(member);
+                SimplifyItems(member); //Because all the wildcards are done we now move to conjunction simplification
                 return;
             }
             RemoveWildCard(wildCards[0], member);
@@ -917,33 +951,55 @@ namespace shorty
             
         }
 
-        private Dictionary<MemberDecl, int[]> _simpIndex; //TODO: tuple so brokenItems can be stored
+        
         private void SimplifyItems(MemberDecl member)
         {
-            if(_simpIndex[member] == null)
-                _simpIndex[member] = new int[2] {0,0};
+            if (_simpIndex[member] == null) {
+                _simpIndex[member] = new Tuple<List<Tuple<SimplificationItemInMethod, List<SimplificationItemInMethod>>>, int[]>(
+                    new List<Tuple<SimplificationItemInMethod, List<SimplificationItemInMethod>>>(),
+                    new int[2]);
+            }
+
             List<Wrap<Statement>> asserts = _allRemovableTypes.RemovableTypesInMethods[member].Asserts;
             List<Wrap<MaybeFreeExpression>> invariants = _allRemovableTypes.RemovableTypesInMethods[member].Invariants;
-            var index = _simpIndex[member][0];
+            var index = _simpIndex[member].Item2[0];
             if (index > asserts.Count + invariants.Count) return;
 //            _simpIndex[member].Item1 = _simpIndex[member].Item1 + 1;
 
             if (index < asserts.Count) {
-                SimplifyItem(asserts[index]);
+                SimplifyItem(asserts[index], member);
             }
             else {
-                SimplifyItem(invariants[asserts.Count-index]);
+                SimplifyItem(invariants[asserts.Count-index], member);
             }
-            
             
         }
 
-        private void SimplifyItem<T>(Wrap<T> wrap)
+        private void SimplifyItem<T>(Wrap<T> wrap, MemberDecl member)
         {
-            Simplifier simplifier = new Simplifier(_program);
+            var itemIndex = _simpIndex[member].Item2[0];
+            var brokenItemIndex = _simpIndex[member].Item2[1];
+            if (brokenItemIndex > _simpIndex[member].Item1.Count) {
+                _simpIndex[member].Item2[0]++;
+                _simpIndex[member].Item2[1] = 0;
+                return;
+            }
+            //if index for item is 0, the items haven't been inserted
+            if (brokenItemIndex == 0)
+                InitialiseBrokenItems(wrap, member);
 
-            var brokenItems = simplifier.BreakDownExpr(wrap);
+            var brokenItem = _simpIndex[member].Item1[itemIndex].Item2[brokenItemIndex];
 
+            var item = brokenItem.GetItem();
+            if (item is Wrap<Statement>) {
+                var stmtWrap = (Wrap<Statement>) item;
+                stmtWrap.Remove();
+            }
+            else if (item is Wrap<MaybeFreeExpression>) {
+                var invarWrap = (Wrap<MaybeFreeExpression>) item;
+                invarWrap.Remove();
+            }
+            else throw new Exception("Wrong type for Simplification");
             
 
             var binExpr = Simplifier.GetExpr(wrap.Removable) as BinaryExpr;
@@ -951,6 +1007,26 @@ namespace shorty
                 if (binExpr.Op != BinaryExpr.Opcode.And) return; //TODO simplify when theres an implies
 
             wrap.Remove();
+        }
+
+        private void InitialiseBrokenItems<T>(Wrap<T> wrap, MemberDecl member)
+        {
+            var itemIndex = _simpIndex[member].Item2[0];
+            var brokenItemIndex = _simpIndex[member].Item2[1];
+
+            var brokenItems = Simplifier.BreakDownExpr(wrap);
+            foreach (var brokenItem in brokenItems) {
+                if (brokenItem is Wrap<Statement>) {
+                    var stmtWrap = brokenItem as Wrap<Statement>;
+                    var simpItem = new SimplificationItemInMethod(member, stmtWrap);
+                    _simpIndex[member].Item1[itemIndex].Item2.Add(simpItem);
+                }
+                else if (brokenItem is Wrap<MaybeFreeExpression>) {
+                    var invariantWrap = brokenItem as Wrap<MaybeFreeExpression>;
+                    var simpItem = new SimplificationItemInMethod(member, invariantWrap);
+                    _simpIndex[member].Item1[itemIndex].Item2.Add(simpItem);
+                }
+            }
         }
 
 
@@ -981,12 +1057,68 @@ namespace shorty
                     simpData.RemovableDecreases.Add(wrap);
                 }
                 else {
-                    throw new Exception("Cannot match removed object to removable type");
+                    throw new Exception("Cannot match removed object to removable" + " type");
                 }
             }
             foreach (var wildCard in _wildCardDecreasesRemovedOnRun.Values) {
                 simpData.RemovableWildCardDecreaseses.Add(wildCard);
             }
+            foreach (var allRequiredItems in requiredSubExpressions.Values) {
+                foreach (var originalItem in allRequiredItems.Keys) {
+                    var brokenItems = allRequiredItems[originalItem];
+                    var originalWrap = originalItem.GetItem();
+                    if (originalWrap is Wrap<Statement>) {
+                        var originalAssertWrap = (Wrap<Statement>) originalWrap;
+                        var newItem = CombineAndInsertBrokenWraps(originalAssertWrap, brokenItems);
+                        simpData.SimplifiedAsserts.Add(new Tuple<Statement, Statement>(originalAssertWrap.Removable,newItem.Removable));
+                    }
+                    else if (originalWrap is Wrap<MaybeFreeExpression>) {
+                        var originalAssertWrap = (Wrap<MaybeFreeExpression>)originalWrap;
+                        var newItem = CombineAndInsertBrokenWraps(originalAssertWrap, brokenItems);
+                        simpData.SimplifiedInvariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>(originalAssertWrap.Removable, newItem.Removable));
+                    }
+
+
+                }
+
+//                foreach (var item in itemsInMethod.Item1) {
+//                    var brokenItems = item.Item2;
+//                    if (brokenItems.Count == 0) continue;
+//                    
+//                    List<object> items = new List<object>();
+//                    foreach (var brokenItemSimp in brokenItems) {
+//                        var brokenItem = brokenItemSimp.GetItem();
+//                        items.Add(brokenItem);
+//                        if(brokenItem is Wrap<Statement>)
+//                            ((Wrap<Statement>)brokenItem).Remove();                        
+//                    }
+//                    var originalItem = item.Item1.GetItem();
+//                    if (originalItem is Wrap<Statement>) {
+//                        var originalWrap = (Wrap<Statement>) originalItem;
+//                        List<Wrap<Statement>> brokenWraps = new List<Wrap<Statement>>();
+//                        foreach (var brokenItem in items) {
+//                            if (brokenItem is Wrap<Statement>) {
+//                                brokenWraps.Add((Wrap<Statement>) brokenItem);
+//                            }
+//                        }
+//                        var newItem = Simplifier.CombineToNewWrap(originalWrap, brokenWraps);
+//                    }
+//                }
+                //remove all brokenItems
+            }
+        }
+
+        public Wrap<T> CombineAndInsertBrokenWraps<T>(Wrap<T> originalItem, List<SimplificationItemInMethod> brokenSimpItems)
+        {
+            List<Wrap<T>> brokenItemWraps = new List<Wrap<T>>();
+            foreach (var brokenSimpItem in brokenSimpItems) {
+                var item = brokenSimpItem.GetItem();
+                if(!(item is Wrap<T>)) throw new Exception("broken item is ont right type!");
+                var wrap = (Wrap<T>) item;
+                wrap.Remove();
+                brokenItemWraps.Add(wrap);
+            }
+            return Simplifier.CombineToNewWrap(originalItem, brokenItemWraps); // <--The item gets inserted to the parent inside here
         }
 
         private void Reset()
@@ -1059,11 +1191,11 @@ namespace shorty
                 wrap.Reinsert();
                 return null;
             }
-            var newWrap = CreateNewWrap(wrap, brokenItemWraps);
+            var newWrap = CombineToNewWrap(wrap, brokenItemWraps);
             return new Tuple<Wrap<T>, Wrap<T>>(wrap, newWrap);
         }
 
-        private Wrap<T> CreateNewWrap<T>(Wrap<T> wrap, List<Wrap<T>> brokenItemWraps)
+        public static Wrap<T> CombineToNewWrap<T>(Wrap<T> wrap, List<Wrap<T>> brokenItemWraps)
         {
             var brokenItems = brokenItemWraps.Select(brokenItemWrap => brokenItemWrap.Removable).ToList();
             var newExpr = CombineItems(brokenItems);
@@ -1077,7 +1209,7 @@ namespace shorty
                 brokenItem.Remove();
         }
 
-        public Wrap<T> CreateNewItem<T>(Wrap<T> wrap, Expression newExpr)
+        public static Wrap<T> CreateNewItem<T>(Wrap<T> wrap, Expression newExpr)
         {
             //Create a new item
             var newItem = GetNewNodeFromItem(wrap.Removable, newExpr);
@@ -1097,7 +1229,7 @@ namespace shorty
             return brokenItems;
         }
 
-        public List<Wrap<T>> BreakDownExpr<T>(Wrap<T> wrap)
+        public static List<Wrap<T>> BreakDownExpr<T>(Wrap<T> wrap)
         {
             var brokenItems = new List<Wrap<T>>();
             var binaryExpr = GetExpr(wrap.Removable) as BinaryExpr;
@@ -1125,7 +1257,7 @@ namespace shorty
             return null;
         }
 
-        private Wrap<T> GetNewNodeFromExpr<T>(Wrap<T> originalWrap, BinaryExpr binExpr, Expression subExpr)
+        private static Wrap<T> GetNewNodeFromExpr<T>(Wrap<T> originalWrap, BinaryExpr binExpr, Expression subExpr)
         {
             var assert = originalWrap.Removable as AssertStmt;
             if (assert != null) {
@@ -1138,7 +1270,7 @@ namespace shorty
             return null;
         }
 
-        private Expression CombineItems<T>(List<T> brokenItems)
+        public static Expression CombineItems<T>(List<T> brokenItems)
         {
             if (brokenItems.Count < 1)
                 return null; //null
@@ -1155,7 +1287,7 @@ namespace shorty
             return binExpr;
         }
 
-        private T GetNewNodeFromItem<T>(T originalItem, Expression expr)
+        private static T GetNewNodeFromItem<T>(T originalItem, Expression expr)
         {
             var assert = originalItem as AssertStmt;
             if (assert != null) {
