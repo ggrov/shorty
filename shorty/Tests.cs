@@ -1,10 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics.Contracts;
 using System.IO;
-using System.Linq;
 using System.Reflection;
-using System.Text;
-using System.Threading.Tasks;
 using NUnit.Framework;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
@@ -17,14 +15,15 @@ namespace shorty
         private void Initialise()
         {
             DafnyOptions.Install(new DafnyOptions());
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             DafnyOptions.O.ProverKillTime = 10;
             Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
             Bpl.OutputPrinter printer = new InvisibleConsolePrinter();
             Bpl.ExecutionEngine.printer = printer;
+//            Contract.ContractFailed += ShortyMain.ContractFailureHandler;
         }
 
         private Program GetProgram(string fileName)
@@ -184,10 +183,10 @@ namespace shorty
         }
 
         [Test]
-        public void TestSimultaneousAllTypeMethodRemover()
+        public void TestSimultaneousAllTypeRemover()
         {
             Initialise();
-            var program = GetProgram("Streams.dfy");
+            var program = GetProgram("CombinedAsserts.dfy");
             var shorty = GetShorty(SimpleCloner.CloneProgram(program));
 
 //            Assert.AreEqual(21, shorty.LemmaCalls.Count);
@@ -235,16 +234,19 @@ namespace shorty
             var allRemovableTypeResults = allType.FastRemoveAllRemovables();
 
             var asserts = oneAtATime.FindRemovableAsserts();
-            Assert.AreEqual(asserts.Count, simultaneous.FindRemovableAsserts().Count);
-            Assert.AreEqual(asserts.Count, allRemovableTypeResults.RemovableAsserts.Count);
-
             var invariants = oneAtATime.FindRemovableInvariants();
-            Assert.AreEqual(invariants.Count, simultaneous.FindRemovableInvariants().Count);
-            Assert.AreEqual(invariants.Count, allRemovableTypeResults.RemovableInvariants.Count);
-
             var decreases = oneAtATime.FindRemovableDecreases();
-            Assert.AreEqual(decreases.Count, simultaneous.FindRemovableDecreases().Count);
-            var all = allRemovableTypeResults.RemovableDecreases;
+            var lemmaCalls = oneAtATime.FindRemovableLemmaCalls();
+            var simplifiedAsserts = oneAtATime.GetSimplifiedAsserts();
+            var simplifiedInvariants = oneAtATime.GetSimplifiedInvariants();
+
+            var simAsserts = simultaneous.FindRemovableAsserts();
+            var simInvariants = simultaneous.FindRemovableInvariants();
+            var simDecreases = simultaneous.FindRemovableDecreases();
+            var simLemmaCalls = simultaneous.FindRemovableLemmaCalls();
+            var simSimplifiedAsserts = simultaneous.GetSimplifiedAsserts();
+            var simSimplifiedInvariants = simultaneous.GetSimplifiedInvariants();
+
             using (TextWriter tw = File.CreateText("H:\\dafny\\oaat.dfy"))
             {
                 oneAtATime.PrintProgram(tw);
@@ -252,26 +254,48 @@ namespace shorty
             using (TextWriter tw = File.CreateText("H:\\dafny\\allType.dfy"))
             {
                 allType.PrintProgram(tw);
+            }using (TextWriter tw = File.CreateText("H:\\dafny\\simul.dfy"))
+            {
+                simultaneous.PrintProgram(tw);
             }
-            Assert.True(allType.IsProgramValid());
-            Assert.AreEqual(decreases.Count, all.Count);
 
-            var lemmaCalls = oneAtATime.FindRemovableLemmaCalls();
-            Assert.AreEqual(lemmaCalls.Count, simultaneous.FindRemovableLemmaCalls().Count);
+
+            Assert.True(oneAtATime.IsProgramValid());
+            Assert.True(simultaneous.IsProgramValid());
+            Assert.True(allType.IsProgramValid());
+
+            Assert.AreEqual(decreases.Count, allRemovableTypeResults.RemovableDecreases.Count); //TODO not removeing parent decreases *?
+
+
+            Assert.AreEqual(asserts.Count, simAsserts.Count);
+            Assert.AreEqual(asserts.Count, allRemovableTypeResults.RemovableAsserts.Count);
+
+            
+            Assert.AreEqual(invariants.Count, simInvariants.Count);
+            Assert.AreEqual(invariants.Count, allRemovableTypeResults.RemovableInvariants.Count);
+
+            Assert.AreEqual(decreases.Count, simDecreases.Count);
+
+            Assert.AreEqual(lemmaCalls.Count, simLemmaCalls.Count);
             Assert.AreEqual(lemmaCalls.Count, allRemovableTypeResults.RemovableLemmaCalls.Count);
 
-            var oaatRemovedCalcs = oneAtATime.FindRemovableCalcs();
-            var simulRemovedCalcs = simultaneous.FindRemovableCalcs();
-            Assert.AreEqual(oaatRemovedCalcs.Item1.Count, simulRemovedCalcs.Item1.Count);
-            Assert.AreEqual(oaatRemovedCalcs.Item2.Count, simulRemovedCalcs.Item2.Count);
-            Assert.AreEqual(oaatRemovedCalcs.Item3.Count, simulRemovedCalcs.Item3.Count);
-            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, simulRemovedCalcs.Item4.Count);
-            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, allRemovableTypeResults.RemovableCalcs.Count);
-            Assert.AreEqual(oneAtATime.GetSimplifiedAsserts().Count, simultaneous.GetSimplifiedAsserts().Count);
-            Assert.AreEqual(oneAtATime.GetSimplifiedInvariants().Count, simultaneous.GetSimplifiedInvariants().Count);
-            Assert.True(oneAtATime.IsProgramValid());
-            Assert.True(simultaneous.IsProgramValid());           
-            
+//            var oaatRemovedCalcs = oneAtATime.FindRemovableCalcs();
+//            var simulRemovedCalcs = simultaneous.FindRemovableCalcs();
+//            Assert.AreEqual(oaatRemovedCalcs.Item1.Count, simulRemovedCalcs.Item1.Count);
+//            Assert.AreEqual(oaatRemovedCalcs.Item2.Count, simulRemovedCalcs.Item2.Count);
+//            Assert.AreEqual(oaatRemovedCalcs.Item3.Count, simulRemovedCalcs.Item3.Count);
+//            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, simulRemovedCalcs.Item4.Count);
+//            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, allRemovableTypeResults.RemovableCalcs.Count);
+//            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, allRemovableTypeResults.RemovableCalcs.Count);
+
+            Assert.AreEqual(simplifiedAsserts.Count, simSimplifiedAsserts.Count);
+            Assert.AreEqual(simplifiedAsserts.Count, allRemovableTypeResults.SimplifiedAsserts.Count);
+
+            //TODO bug in simplifier inserting 2 of the combined new invariants in
+            //TODO bug in allTypeRemover not doing anything about the invariants
+            Assert.AreEqual(simplifiedInvariants.Count, simSimplifiedInvariants.Count);
+            Assert.AreEqual(simplifiedInvariants.Count, allRemovableTypeResults.SimplifiedInvariants.Count);
+
         }
     }
 }
