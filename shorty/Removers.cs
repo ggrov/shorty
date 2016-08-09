@@ -328,7 +328,7 @@ namespace shorty
     {
         public abstract void ErrorInformation(ErrorInformation errorInfo);
 
-        protected List<MemberDecl> AlreadyReAddedMembers = new List<MemberDecl>();
+        public List<MemberDecl> AlreadyReAddedMembers = new List<MemberDecl>();
 
         protected MemberDecl FindMethod(int pos, IEnumerable<MemberDecl> members)
         {
@@ -374,16 +374,21 @@ namespace shorty
             }
         }
 
-        private static MemberDecl FindMethodInStandardBodies(int pos, IList<MemberDecl> memberDecls)
+        private MemberDecl FindMethodInStandardBodies(int pos, IList<MemberDecl> memberDecls)
         {
             foreach (var member in memberDecls) {
-                if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos)
+                if (member.BodyStartTok.pos <= pos && member.BodyEndTok.pos >= pos) {
+                    if(AlreadyReAddedMembers.Contains(member)) throw new AlreadyRemovedException();
                     return member;
+                }
                 if (member.BodyStartTok.pos != 0 || member.BodyEndTok.pos != 0) continue; //Sometimes this bugs out... needs resolved first?
                 var method = member as Method;
                 if (method == null) continue;
                 if (method.Body.Tok.pos <= pos && method.Body.EndTok.pos >= pos)
+                {
+                    if (AlreadyReAddedMembers.Contains(member)) throw new AlreadyRemovedException();
                     return member;
+                }
             }
             return null;
         }
@@ -435,6 +440,7 @@ namespace shorty
                 RunVerification(similRemover);
                 ReinsertInvalidItems(similRemover, removableWraps);
                 similRemover.LastRemovedItem = new Dictionary<MemberDecl, Wrap<T>>();
+                similRemover.AlreadyReAddedMembers = new List<MemberDecl>();
             }
             return removableWraps;
         }
@@ -793,12 +799,12 @@ namespace shorty
             }
             //creates broken item to simpTypeThing and removes the item
             var item = Brokenitems[_index].GetItem();
-            if (item is Wrap<Statement>) {
+            if (item is Wrap<Statement>)
                 (item as Wrap<Statement>).Remove();
-            } else if (item is Wrap<MaybeFreeExpression>) {
+            else if (item is Wrap<MaybeFreeExpression>) 
                 (item as Wrap<MaybeFreeExpression>).Remove();
-            }
-            else  throw new UnableToDetermineTypeException();
+            else
+                throw new UnableToDetermineTypeException();
             dictionary.Add(_member, this);
             _index++;
         }
@@ -812,8 +818,9 @@ namespace shorty
                 RequiredItems.Add(new SimplificationItemInMethod(_member, assertWrap));
             }
             else if (item is Wrap<MaybeFreeExpression>) {
-                (item as Wrap<MaybeFreeExpression>).Reinsert();
-                RequiredItems.Add(new SimplificationItemInMethod(_member, item as Wrap<MaybeFreeExpression>));
+                var invariantWrap = item as Wrap<MaybeFreeExpression>;
+                invariantWrap.Reinsert();
+                RequiredItems.Add(new SimplificationItemInMethod(_member, invariantWrap));
             }
             else 
                 throw new UnableToDetermineTypeException();
@@ -864,6 +871,7 @@ namespace shorty
                     _allConjunctions.Add(member, new List<ConjunctionData>());
                 if (!_allConjunctions[member].Contains(conjunction))
                     _allConjunctions[member].Add(conjunction);
+                _removedBrokenItems.Remove(member);
             }
             else
             {
@@ -978,15 +986,13 @@ namespace shorty
             var requiredItems = conjunctionData.RequiredItems;
             if (requiredItems.Count == 0 || requiredItems.Count == conjunctionData.Brokenitems.Count) return;
             var originalWrap = originalItem.GetItem();
-            if (originalWrap is Wrap<Statement>) {
-                simpData.SimplifiedAsserts.Add(CombineRequiredSubexpressions(simpData, originalWrap as Wrap<Statement>, requiredItems));
-            }
-            else if (originalWrap is Wrap<MaybeFreeExpression>) {
-                simpData.SimplifiedInvariants.Add(CombineRequiredSubexpressions<MaybeFreeExpression>(simpData, originalWrap as Wrap<MaybeFreeExpression>, requiredItems));
-            }
+            if (originalWrap is Wrap<Statement>)
+                simpData.SimplifiedAsserts.Add(CombineRequiredSubexpressions(originalWrap as Wrap<Statement>, requiredItems));
+            else if (originalWrap is Wrap<MaybeFreeExpression>)
+                simpData.SimplifiedInvariants.Add(CombineRequiredSubexpressions(originalWrap as Wrap<MaybeFreeExpression>, requiredItems));
         }
 
-        private static Tuple<T,T> CombineRequiredSubexpressions<T>(SimplificationWrapData simpData, Wrap<T> originalWrap,List<SimplificationItemInMethod> requiredItems)
+        private static Tuple<T,T> CombineRequiredSubexpressions<T>(Wrap<T> originalWrap,List<SimplificationItemInMethod> requiredItems)
         {
             var brokenItemWraps = requiredItems.Select(requiredItem => requiredItem.GetItem() as Wrap<T>).ToList();
             foreach (var brokenItemWrap in brokenItemWraps)
@@ -1176,6 +1182,7 @@ namespace shorty
             _removedItemsOnRun = new Dictionary<MemberDecl, SimplificationItemInMethod>();
             _wildCardDecreasesRemovedOnRun = new Dictionary<MemberDecl, WildCardDecreases>();
             _removedBrokenItems = new Dictionary<MemberDecl, ConjunctionData>();
+            
         }
 
         private void VerifyProgram()

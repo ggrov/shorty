@@ -214,22 +214,12 @@ namespace shorty
         public void ThouroughTestDifferentRemovals()
         {
             Initialise();
-            TryTestRemoval("ListCopy.dfy");
-            TryTestRemoval("Calc.dfy");
-            TryTestRemoval("CombinedAsserts.dfy");
-            TryTestRemoval("Combinators.dfy");
-            TryTestRemoval("FindZero.dfy");
-            TryTestRemoval("Streams.dfy");
-        }
-
-        void TryTestRemoval(string fileName)
-        {
-            try {
-                CompareAllRemovals(GetProgram(fileName));
-            }
-            catch (Exception e){
-                Console.WriteLine(fileName + "failed: "+e.Message);
-            }
+            CompareAllRemovals(GetProgram("ListCopy.dfy"));
+            CompareAllRemovals(GetProgram("Calc.dfy"));
+            CompareAllRemovals(GetProgram("CombinedAsserts.dfy"));
+            CompareAllRemovals(GetProgram("Combinators.dfy"));
+            CompareAllRemovals(GetProgram("FindZero.dfy"));
+            CompareAllRemovals(GetProgram("Streams.dfy"));
         }
 
         private void CompareAllRemovals(Program program)
