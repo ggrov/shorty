@@ -107,8 +107,8 @@ namespace shorty
         {
             DafnyOptions.Install(new DafnyOptions());
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
-            DafnyOptions.O.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-//            DafnyOptions.O.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            DafnyOptions.O.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            DafnyOptions.O.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             DafnyOptions.O.ApplyDefaultOptions();
             DafnyOptions.O.RunningBoogieFromCommandLine = true;
             DafnyOptions.O.VerifySnapshots = 1;

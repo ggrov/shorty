@@ -831,7 +831,7 @@ namespace shorty
         private Dictionary<MemberDecl, WildCardDecreases> _wildCardDecreasesRemovedOnRun = new Dictionary<MemberDecl, WildCardDecreases>();
 
         //First list represents an item, sub list is all the broken expressions needed for it.
-        private readonly Dictionary<MemberDecl, List<ConjunctionData>> _requiredSubExpressions = new Dictionary<MemberDecl, List<ConjunctionData>>();
+        private readonly Dictionary<MemberDecl, List<ConjunctionData>> _allConjunctions = new Dictionary<MemberDecl, List<ConjunctionData>>();
         private readonly Dictionary<MemberDecl, int> _conjunctionIndex = new Dictionary<MemberDecl, int>();
         private Dictionary<MemberDecl, ConjunctionData> _removedBrokenItems = new Dictionary<MemberDecl, ConjunctionData>();
 
@@ -857,13 +857,13 @@ namespace shorty
                 AlreadyReAddedMembers.Add(member);
                 wildCard.CantBeRemoved = true;
             }
-            else if (_removedBrokenItems[member] != null) { //Reinsert the subexpression
+            else if (_removedBrokenItems.ContainsKey(member)) { //Reinsert the subexpression
                 var conjunction = _removedBrokenItems[member];
                 conjunction.ReinsertLast();
-                if(!_requiredSubExpressions.ContainsKey(member))
-                    _requiredSubExpressions.Add(member, new List<ConjunctionData>());
-                if (!_requiredSubExpressions[member].Contains(conjunction))
-                    _requiredSubExpressions[member].Add(conjunction);
+                if(!_allConjunctions.ContainsKey(member))
+                    _allConjunctions.Add(member, new List<ConjunctionData>());
+                if (!_allConjunctions[member].Contains(conjunction))
+                    _allConjunctions[member].Add(conjunction);
             }
             else
             {
@@ -965,34 +965,36 @@ namespace shorty
 
         private void GatherConjunctionSimpData(SimplificationWrapData simpData)
         {
-            foreach (var requiredSubExpressionsInMethod in _requiredSubExpressions.Values) {
-                foreach (var conjunctionData in requiredSubExpressionsInMethod) {
-                    var originalItem = conjunctionData.OriginalItem;
-                    var requiredItems = conjunctionData.RequiredItems;
-                    if (requiredItems.Count == 0) continue;
-                    var originalWrap = originalItem.GetItem();
-                    if (originalWrap is Wrap<Statement>) {
-                        var originalAssertWrap = originalWrap as Wrap<Statement>;
-                        var brokenItemWraps = requiredItems.Select(requiredItem => requiredItem.GetItem() as Wrap<Statement>).ToList();
-                        foreach (var brokenItemWrap in brokenItemWraps)
-                            brokenItemWrap.Remove();
-                        var newWrap = Simplifier.CombineToNewWrap(originalAssertWrap, brokenItemWraps);
-                        originalAssertWrap.Remove();
-                        newWrap.Reinsert();
-                        simpData.SimplifiedAsserts.Add(new Tuple<Statement, Statement>(originalAssertWrap.Removable, newWrap.Removable));
-                    }
-                    else if (originalWrap is Wrap<MaybeFreeExpression>) {
-                        var originalInvariantWrap = originalWrap as Wrap<MaybeFreeExpression>;
-                        var brokenItemWraps = requiredItems.Select(requiredItem => requiredItem.GetItem() as Wrap<MaybeFreeExpression>).ToList();
-                        foreach (var brokenItemWrap in brokenItemWraps)
-                            brokenItemWrap.Remove();
-                        var newWrap = Simplifier.CombineToNewWrap(originalInvariantWrap, brokenItemWraps);
-                        originalInvariantWrap.Remove();
-                        newWrap.Reinsert();
-                        simpData.SimplifiedInvariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>(originalInvariantWrap.Removable, newWrap.Removable));
-                    }
+            foreach (var conjunctionsInMethod in _allConjunctions.Values) {
+                foreach (var conjunctionData in conjunctionsInMethod) {
+                    GatherSimpDataFromConjunction(simpData, conjunctionData);
                 }
             }
+        }
+
+        private static void GatherSimpDataFromConjunction(SimplificationWrapData simpData, ConjunctionData conjunctionData)
+        {
+            var originalItem = conjunctionData.OriginalItem;
+            var requiredItems = conjunctionData.RequiredItems;
+            if (requiredItems.Count == 0 || requiredItems.Count == conjunctionData.Brokenitems.Count) return;
+            var originalWrap = originalItem.GetItem();
+            if (originalWrap is Wrap<Statement>) {
+                simpData.SimplifiedAsserts.Add(CombineRequiredSubexpressions(simpData, originalWrap as Wrap<Statement>, requiredItems));
+            }
+            else if (originalWrap is Wrap<MaybeFreeExpression>) {
+                simpData.SimplifiedInvariants.Add(CombineRequiredSubexpressions<MaybeFreeExpression>(simpData, originalWrap as Wrap<MaybeFreeExpression>, requiredItems));
+            }
+        }
+
+        private static Tuple<T,T> CombineRequiredSubexpressions<T>(SimplificationWrapData simpData, Wrap<T> originalWrap,List<SimplificationItemInMethod> requiredItems)
+        {
+            var brokenItemWraps = requiredItems.Select(requiredItem => requiredItem.GetItem() as Wrap<T>).ToList();
+            foreach (var brokenItemWrap in brokenItemWraps)
+                brokenItemWrap.Remove();
+            var newWrap = Simplifier.CombineToNewWrap(originalWrap, brokenItemWraps);
+            originalWrap.Remove();
+            newWrap.Reinsert();
+            return new Tuple<T, T>(originalWrap.Removable, newWrap.Removable);
         }
 
         private bool RemoveAnItemFromEachMethod(Dictionary<MemberDecl, List<SimplificationItemInMethod>> simpItems)
@@ -1027,7 +1029,8 @@ namespace shorty
             RemoveExtraWildCardDecreases(wildCards);
             if (wildCards[0].Simplified) 
                 _allRemovableTypes.RemoveWildCardDecreases(wildCards[0]);
-            if (wildCards.Count == 0) return true;
+            if (wildCards.Count == 0)
+                return SimplifyItems(member);
             RemoveWildCard(wildCards[0], member);
             return false;
         }
@@ -1063,47 +1066,49 @@ namespace shorty
             
         }
 
-        
+
         private bool SimplifyItems(MemberDecl member)
         {
-            if (!_removedBrokenItems.ContainsKey(member)) {
-                
-            }
-
             var asserts = _allRemovableTypes.RemovableTypesInMethods[member].Asserts;
             var invariants = _allRemovableTypes.RemovableTypesInMethods[member].Invariants;
-            if(!_conjunctionIndex.ContainsKey(member))
+            if (!_conjunctionIndex.ContainsKey(member))
                 _conjunctionIndex.Add(member, 0);
             var index = _conjunctionIndex[member];
-            if (asserts.Count + invariants.Count == 0 ||index > asserts.Count + invariants.Count) return true;
-
-            if (!_requiredSubExpressions.ContainsKey(member)) {
-                if (index < asserts.Count) {
-                    InitialiseItem(asserts[index], member);
+            if (asserts.Count + invariants.Count == 0 || index > asserts.Count + invariants.Count)
+                return true;
+            //see if there is a conj already made and not finished
+            if (_allConjunctions.ContainsKey(member)) {
+                foreach (var conj in _allConjunctions[member]) {
+                    if (conj.Finished) continue;
+                    conj.RemoveNext(_removedBrokenItems);
+                    if (conj.Finished)
+                        _conjunctionIndex[member]++;
+                    return false;
                 }
-                else if (asserts.Count - index < invariants.Count) {
-                    InitialiseItem(invariants[asserts.Count - index], member);
-                }
-                else return true;
             }
 
-            //see if there is a conj already made and not finished
-            foreach (var conj in _requiredSubExpressions[member]) {
-                if (conj.Finished) continue;
-                conj.RemoveNext(_removedBrokenItems);
-                if (conj.Finished)
-                    _conjunctionIndex[member]++;
+            // otherwise we create a new one
+            if (index < asserts.Count) {
+                InitialiseItem(asserts[index], member);
                 return false;
             }
-            return true;
+            else if (index - asserts.Count < invariants.Count) {
+                InitialiseItem(invariants[index - asserts.Count], member);
+                return false;
+            }
+            else return true;
+            
         }
 
         private void InitialiseItem<T>(Wrap<T> wrap, MemberDecl member)
         {
             var conj = InitialiseBrokenItems(wrap, member);
-            if (!_requiredSubExpressions.ContainsKey(member))
-                _requiredSubExpressions.Add(member, new List<ConjunctionData>());
-//            _requiredSubExpressions[member].Add(conj);
+            if (!_allConjunctions.ContainsKey(member))
+                _allConjunctions.Add(member, new List<ConjunctionData>());
+            _allConjunctions[member].Add(conj);
+            conj.RemoveNext(_removedBrokenItems);
+            if (conj.Finished)
+                _conjunctionIndex[member]++;
         }
 
         private ConjunctionData InitialiseBrokenItems<T>(Wrap<T> wrap, MemberDecl member)
@@ -1238,7 +1243,11 @@ namespace shorty
 
         public static Wrap<T> CombineToNewWrap<T>(Wrap<T> wrap, List<Wrap<T>> brokenItemWraps)
         {
-            var brokenItems = brokenItemWraps.Select(brokenItemWrap => brokenItemWrap.Removable).ToList();
+            List<T> brokenItems = new List<T>();
+            foreach (var brokenItemWrap in brokenItemWraps) {
+                brokenItemWrap.Remove();
+                brokenItems.Add(brokenItemWrap.Removable);
+            }
             var newExpr = CombineItems(brokenItems);
             var newWrap = CreateNewItem(wrap, newExpr);
             return newWrap;
@@ -1266,8 +1275,8 @@ namespace shorty
         private List<Wrap<T>> BreakAndReinsertItem<T>(Wrap<T> wrap)
         {
             var brokenItems = BreakDownExpr(wrap);
-            foreach (var brokenitem in brokenItems) {
-                brokenitem.ParentList.Insert(wrap.Index, brokenitem.Removable);
+            foreach (var brokenItem in brokenItems) {
+                brokenItem.Reinsert();
             }
             return brokenItems;
         }

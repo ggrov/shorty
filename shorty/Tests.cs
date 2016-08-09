@@ -15,8 +15,8 @@ namespace shorty
         private void Initialise()
         {
             DafnyOptions.Install(new DafnyOptions());
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             DafnyOptions.O.ProverKillTime = 10;
@@ -87,18 +87,14 @@ namespace shorty
             foreach (var wildCardDecreasese in shorty.DecreasesWildCards) {
                 count += wildCardDecreasese.Count;
             }
-            Assert.AreEqual(5,count);
+            Assert.AreEqual(5, count);
             Assert.AreEqual(1, shorty.FindRemovableDecreases().Count);
             Assert.True(shorty.IsProgramValid());
-             using (TextWriter tw = File.CreateText("H:\\dafny\\shorty.dfy")) {
-                shorty.PrintProgram(tw);
-            }
 
-             int newCount = shorty.Decreases.Count;
-             foreach (var wildCardDecreasese in shorty.DecreasesWildCards)
-             {
-                 newCount += wildCardDecreasese.Count;
-             }
+            int newCount = shorty.Decreases.Count;
+            foreach (var wildCardDecreasese in shorty.DecreasesWildCards) {
+                newCount += wildCardDecreasese.Count;
+            }
             Assert.AreEqual(4, newCount);
         }
 
@@ -125,7 +121,7 @@ namespace shorty
             var simplifiedAsserts = shorty.GetSimplifiedAsserts();
             Assert.AreEqual(1, simplifiedAsserts.Count);
             Assert.True(shorty.IsProgramValid());
-            var assert = (AssertStmt)simplifiedAsserts[0].Item2;
+            var assert = (AssertStmt) simplifiedAsserts[0].Item2;
             Assert.True(assert.Expr is ParensExpression);
             Assert.True(shorty.IsProgramValid());
             //TODO looking into the assertStmt to make sure it actually broke down
@@ -158,13 +154,6 @@ namespace shorty
         }
 
         [Test]
-        public void TestDifferentRemovals()
-        {
-            Initialise();
-            CompareAllRemovals(GetProgram("Combinators.dfy"));
-        }
-
-        [Test]
         public void TestMethodRemoval()
         {
             Initialise();
@@ -174,53 +163,73 @@ namespace shorty
                 if (member.Name == "Copy") {
                     var methodRemover = new MethodRemover(program);
                     var removables = methodRemover.FullSimplify(member);
-                    Assert.AreEqual(2,removables.RemovableInvariants.Count);
-                    Assert.AreEqual(3,removables.RemovableAsserts.Count);
+                    Assert.AreEqual(2, removables.RemovableInvariants.Count);
+                    Assert.AreEqual(3, removables.RemovableAsserts.Count);
                     var verifier = new SimpleVerifier();
                     Assert.True(verifier.IsProgramValid(program));
                 }
             }
         }
 
-        [Test]
-        public void TestSimultaneousAllTypeRemover()
-        {
-            Initialise();
-            var program = GetProgram("CombinedAsserts.dfy");
-            var shorty = GetShorty(SimpleCloner.CloneProgram(program));
-
-//            Assert.AreEqual(21, shorty.LemmaCalls.Count);
-//            var data = shorty.FastRemoveAllRemovables();
-//
-//            Assert.AreEqual(17, data.RemovableLemmaCalls.Count);
-//            Assert.AreEqual(4, shorty.LemmaCalls.Count);
-//            Assert.True(shorty.IsProgramValid());
-
-
-            program = GetProgram("CombinedAsserts.dfy");
-            shorty = GetShorty(SimpleCloner.CloneProgram(program));
-            var data = shorty.FastRemoveAllRemovables();
-
-            Assert.AreEqual(1, data.SimplifiedAsserts.Count);
-        }
-
         private List<MemberDecl> GetMembers(Program program)
         {
             var members = new List<MemberDecl>();
-            members.AddRange(((ClassDecl)program.DefaultModuleDef.TopLevelDecls[0]).Members);
+            members.AddRange(((ClassDecl) program.DefaultModuleDef.TopLevelDecls[0]).Members);
             return members;
         }
 
-        [Test]//[Ignore("Takes a very long time")]
-        public void ThouroughTestDifferentRemovals()
+        [Test]
+        public void TestSimultaneousAllTypeRemoverConjunctions()
+        {
+            Initialise();
+            var program = GetProgram("ListCopy.dfy");
+            
+            var shorty = GetShorty(SimpleCloner.CloneProgram(program));
+            var shorty2 = GetShorty(SimpleCloner.CloneProgram(program));
+            shorty2.FindRemovableInvariants();
+            shorty2.GetSimplifiedInvariants();
+            var data = shorty.FastRemoveAllRemovables();
+
+            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\allType.dfy"))
+            {
+                shorty.PrintProgram(tw);
+            }
+            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\oaat.dfy"))
+            {
+                shorty2.PrintProgram(tw);
+            }
+
+
+            Assert.AreEqual(1, data.SimplifiedInvariants.Count);
+        }
+
+        [Test]
+        public void TestDifferentRemovals()
         {
             Initialise();
             CompareAllRemovals(GetProgram("ListCopy.dfy"));
-            CompareAllRemovals(GetProgram("Calc.dfy"));
-            CompareAllRemovals(GetProgram("CombinedAsserts.dfy"));
-            CompareAllRemovals(GetProgram("Combinators.dfy"));
-            CompareAllRemovals(GetProgram("FindZero.dfy"));
-            CompareAllRemovals(GetProgram("Streams.dfy"));
+        }
+
+        [Test] //[Ignore("Takes a very long time")]
+        public void ThouroughTestDifferentRemovals()
+        {
+            Initialise();
+            TryTestRemoval("ListCopy.dfy");
+            TryTestRemoval("Calc.dfy");
+            TryTestRemoval("CombinedAsserts.dfy");
+            TryTestRemoval("Combinators.dfy");
+            TryTestRemoval("FindZero.dfy");
+            TryTestRemoval("Streams.dfy");
+        }
+
+        void TryTestRemoval(string fileName)
+        {
+            try {
+                CompareAllRemovals(GetProgram(fileName));
+            }
+            catch (Exception e){
+                Console.WriteLine(fileName + "failed: "+e.Message);
+            }
         }
 
         private void CompareAllRemovals(Program program)
@@ -247,15 +256,16 @@ namespace shorty
             var simSimplifiedAsserts = simultaneous.GetSimplifiedAsserts();
             var simSimplifiedInvariants = simultaneous.GetSimplifiedInvariants();
 
-            using (TextWriter tw = File.CreateText("H:\\dafny\\oaat.dfy"))
-            {
+//            using (TextWriter tw = File.CreateText("H:\\dafny\\oaat.dfy"))
+            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\oaat.dfy")) {
                 oneAtATime.PrintProgram(tw);
             }
-            using (TextWriter tw = File.CreateText("H:\\dafny\\allType.dfy"))
-            {
+//            using (TextWriter tw = File.CreateText("H:\\dafny\\allType.dfy"))
+            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\simult.dfy")) {
                 allType.PrintProgram(tw);
-            }using (TextWriter tw = File.CreateText("H:\\dafny\\simul.dfy"))
-            {
+            }
+//            using (TextWriter tw = File.CreateText("H:\\dafny\\simul.dfy"))
+            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\allType.dfy")) {
                 simultaneous.PrintProgram(tw);
             }
 
@@ -264,17 +274,15 @@ namespace shorty
             Assert.True(simultaneous.IsProgramValid());
             Assert.True(allType.IsProgramValid());
 
-            Assert.AreEqual(decreases.Count, allRemovableTypeResults.RemovableDecreases.Count); //TODO not removeing parent decreases *?
-
-
             Assert.AreEqual(asserts.Count, simAsserts.Count);
             Assert.AreEqual(asserts.Count, allRemovableTypeResults.RemovableAsserts.Count);
 
-            
+
             Assert.AreEqual(invariants.Count, simInvariants.Count);
             Assert.AreEqual(invariants.Count, allRemovableTypeResults.RemovableInvariants.Count);
 
             Assert.AreEqual(decreases.Count, simDecreases.Count);
+            Assert.AreEqual(decreases.Count, allRemovableTypeResults.RemovableDecreases.Count);
 
             Assert.AreEqual(lemmaCalls.Count, simLemmaCalls.Count);
             Assert.AreEqual(lemmaCalls.Count, allRemovableTypeResults.RemovableLemmaCalls.Count);
@@ -292,10 +300,9 @@ namespace shorty
             Assert.AreEqual(simplifiedAsserts.Count, allRemovableTypeResults.SimplifiedAsserts.Count);
 
             //TODO bug in simplifier inserting 2 of the combined new invariants in
-            //TODO bug in allTypeRemover not doing anything about the invariants
+            //TODO bug in allTypeRemover making invariants big
             Assert.AreEqual(simplifiedInvariants.Count, simSimplifiedInvariants.Count);
             Assert.AreEqual(simplifiedInvariants.Count, allRemovableTypeResults.SimplifiedInvariants.Count);
-
         }
     }
 }
