@@ -204,10 +204,26 @@ namespace shorty
         }
 
         [Test]
+        public void TestSimultaneousAllTypeRemoverCalcs() {
+            Initialise();
+            var program = GetProgram("Calc.dfy");
+            var shorty = GetShorty(program);
+
+            var data = shorty.FastRemoveAllRemovables();
+            var simplifiedCalcs = data.SimplifiedCalcs;
+            var removedCalcs = data.RemovableCalcs;
+
+            Assert.AreEqual(3, simplifiedCalcs.Item1.Count);
+            Assert.AreEqual(1, simplifiedCalcs.Item2.Count);
+            Assert.AreEqual(1, removedCalcs.Count);
+            Assert.True(shorty.IsProgramValid());
+        }
+
+        [Test]
         public void TestDifferentRemovals()
         {
             Initialise();
-            CompareAllRemovals(GetProgram("ListCopy.dfy"));
+            CompareAllRemovals(GetProgram("Calc.dfy"));
         }
 
         [Test] //[Ignore("Takes a very long time")]
@@ -277,14 +293,17 @@ namespace shorty
             Assert.AreEqual(lemmaCalls.Count, simLemmaCalls.Count);
             Assert.AreEqual(lemmaCalls.Count, allRemovableTypeResults.RemovableLemmaCalls.Count);
 
-//            var oaatRemovedCalcs = oneAtATime.FindRemovableCalcs();
-//            var simulRemovedCalcs = simultaneous.FindRemovableCalcs();
-//            Assert.AreEqual(oaatRemovedCalcs.Item1.Count, simulRemovedCalcs.Item1.Count);
-//            Assert.AreEqual(oaatRemovedCalcs.Item2.Count, simulRemovedCalcs.Item2.Count);
-//            Assert.AreEqual(oaatRemovedCalcs.Item3.Count, simulRemovedCalcs.Item3.Count);
-//            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, simulRemovedCalcs.Item4.Count);
-//            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, allRemovableTypeResults.RemovableCalcs.Count);
-//            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, allRemovableTypeResults.RemovableCalcs.Count);
+            var oaatRemovedCalcs = oneAtATime.FindRemovableCalcs();
+            var simulRemovedCalcs = simultaneous.FindRemovableCalcs();
+            var allTypeCalcs = allRemovableTypeResults.SimplifiedCalcs;
+            Assert.AreEqual(oaatRemovedCalcs.Item1.Count, simulRemovedCalcs.Item1.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item1.Count, allTypeCalcs.Item1.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item2.Count, simulRemovedCalcs.Item2.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item2.Count, allTypeCalcs.Item2.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item3.Count, simulRemovedCalcs.Item3.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item3.Count, allTypeCalcs.Item3.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, simulRemovedCalcs.Item4.Count);
+            Assert.AreEqual(oaatRemovedCalcs.Item4.Count, allRemovableTypeResults.RemovableCalcs.Count);
 
             Assert.AreEqual(simplifiedAsserts.Count, simSimplifiedAsserts.Count);
             Assert.AreEqual(simplifiedAsserts.Count, allRemovableTypeResults.SimplifiedAsserts.Count);

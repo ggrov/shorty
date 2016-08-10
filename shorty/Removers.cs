@@ -478,7 +478,7 @@ namespace shorty
         public List<Wrap<Statement>> RemovableCalcs = new List<Wrap<Statement>>();
         public List<Tuple<Statement, Statement>> SimplifiedAsserts = new List<Tuple<Statement, Statement>>();
         public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> SimplifiedInvariants = new List<Tuple<MaybeFreeExpression, MaybeFreeExpression>>();
-        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifiedCalcs;
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(new List<Expression>(), new List<BlockStmt>(), new List<CalcStmt.CalcOp>());
         public List<WildCardDecreases> RemovableWildCardDecreaseses = new List<WildCardDecreases>();
 
         public SimplificationData ToSimplificationData()
@@ -500,6 +500,7 @@ namespace shorty
                 simpData.SimplifiedAsserts.Add(new Tuple<Statement, Statement>(simplifiedAssert.Item1, simplifiedAssert.Item2));
             foreach (var simplifiedInvariant in SimplifiedInvariants)
                 simpData.SimplifiedInvariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>(simplifiedInvariant.Item1, simplifiedInvariant.Item2));
+            simpData.SimplifiedCalcs = SimplifiedCalcs;
             return simpData;
         }
     }
@@ -827,6 +828,144 @@ namespace shorty
         }
     }
 
+    class RemovableCalcParts //TODO use this more
+    {
+        public List<Expression> Lines = new List<Expression>();
+        public List<BlockStmt> Hints = new List<BlockStmt>();
+        public List<CalcStmt.CalcOp> CalcOps = new List<CalcStmt.CalcOp>();
+    }
+
+    class CalcData
+    {
+        private readonly CalcStmt _calcStmt;
+        
+        public RemovableCalcParts RemovableCalcParts { get; private set; }
+        public bool Finished { get; private set; }
+        private int _lineIndex = 1, _hintIndex = 1; //start at 1 as first shouldn't be removed
+        public readonly List<Expression> RemovedLines = new List<Expression>();
+        public readonly List<BlockStmt> RemovedHints = new List<BlockStmt>();
+        public readonly List<CalcStmt.CalcOp> RemovedCalcs = new List<CalcStmt.CalcOp>();
+
+        private Expression _lastRemovedLine;
+        private BlockStmt _lastRemovedHint;
+        private CalcStmt.CalcOp _lastRemovedCalcOp;
+
+        private List<Statement> _lastHintBody;
+
+        private bool _linesComplete = false;
+
+        public CalcData(CalcStmt calcStmt)
+        {
+            RemovableCalcParts = new RemovableCalcParts();
+            _calcStmt = calcStmt;
+            Finished = false;
+        }
+
+        public void RemoveNext()
+        {
+            GatherRemovableParts();
+            if (!_linesComplete)
+                RemoveNextLineAndHint();
+            else 
+                EmptyNextHint();
+        }
+
+        private void RemoveNextLineAndHint()
+        {
+            if (_calcStmt.Lines.Count == _lineIndex+1) {
+                _linesComplete = true;
+                _hintIndex = 0;
+                EmptyNextHint();
+                return;
+            }
+
+            if (_lastRemovedLine != null && _lastRemovedHint != null && _lastRemovedCalcOp != null) {
+                _hintIndex = 0;
+            }
+
+            _lastRemovedLine = _calcStmt.Lines[_lineIndex];
+            _lastRemovedHint = _calcStmt.Hints[_hintIndex];
+            _lastRemovedCalcOp = _calcStmt.StepOps[_hintIndex];
+
+            _calcStmt.Lines.RemoveAt(_lineIndex);
+            _calcStmt.Hints.RemoveAt(_hintIndex);
+            _calcStmt.StepOps.RemoveAt(_hintIndex);
+            // indexes not changed here - if they are successfully removed, the new ones will fall down to this position
+        }
+
+        private void GatherRemovableParts()
+        {
+            if (_lastRemovedLine != null)
+                RemovableCalcParts.Lines.Add(_lastRemovedLine);
+            if (_lastRemovedHint != null && _lastRemovedCalcOp != null) {
+                if (_lastRemovedHint.Body.Count > 0) {
+                    RemovableCalcParts.Hints.Add(_lastRemovedHint);
+                    RemovableCalcParts.CalcOps.Add(_lastRemovedCalcOp);
+                }
+            }
+        }
+
+        private void EmptyNextHint()
+        {
+            if (_hintIndex >= _calcStmt.Hints.Count - 1) //TODO only empty if its not already empty
+                Finished = true;
+            else {
+                _hintIndex++;
+                EmptyHintBody(_calcStmt.Hints[_hintIndex]);
+                _lastRemovedHint = _calcStmt.Hints[_hintIndex];
+                _lastRemovedCalcOp = _calcStmt.StepOps[_hintIndex];
+            }
+        }
+        
+        private void EmptyHintBody(BlockStmt hint)
+        {
+            _lastHintBody = new List<Statement>();
+            var body = hint.Body;
+            while (body.Count > 0) {
+                _lastHintBody.Add(body[0]);
+                body.RemoveAt(0);
+            }
+        }
+
+        public void FailureOccured()
+        {
+            if (!_linesComplete) 
+                ReinsertLastLineAndHint();
+            else 
+                RefillLastHintBody();
+        }
+
+        private void ReinsertLastLineAndHint()
+        {
+            _calcStmt.Lines.Insert(_lineIndex, _lastRemovedLine);
+            _calcStmt.Hints.Insert(_hintIndex, _lastRemovedHint);
+            _calcStmt.StepOps.Insert(_hintIndex, _lastRemovedCalcOp);
+
+            _lastRemovedLine = null;
+            _lastHintBody = null;
+            _lastRemovedCalcOp = null;
+
+            UpdateIndexes();
+        }
+
+        private void UpdateIndexes()
+        {
+            _hintIndex++;
+            if (_hintIndex <= _calcStmt.Hints.Count - 2) return;
+            // All hints have been attempted to be removed with the line - this line cannot be removed
+            _hintIndex = 1;
+            _lineIndex++;
+            if (_lineIndex >= _calcStmt.Lines.Count - 2)
+                _linesComplete = true;
+        }
+
+        private void RefillLastHintBody()
+        {
+            foreach (var statement in _lastHintBody)
+                _calcStmt.Hints[_hintIndex].Body.Add(statement);
+        }
+    }
+
     class UnableToDetermineTypeException : Exception{}
 
     class SimultaneousAllTypeRemover : VerificationErrorInformationRetriever
@@ -837,10 +976,14 @@ namespace shorty
         private Dictionary<MemberDecl, SimplificationItemInMethod> _removedItemsOnRun = new Dictionary<MemberDecl, SimplificationItemInMethod>();
         private Dictionary<MemberDecl, WildCardDecreases> _wildCardDecreasesRemovedOnRun = new Dictionary<MemberDecl, WildCardDecreases>();
 
-        //First list represents an item, sub list is all the broken expressions needed for it.
         private readonly Dictionary<MemberDecl, List<ConjunctionData>> _allConjunctions = new Dictionary<MemberDecl, List<ConjunctionData>>();
+        private readonly Dictionary<MemberDecl, List<CalcData>> _allCalcs = new Dictionary<MemberDecl, List<CalcData>>();
+
         private readonly Dictionary<MemberDecl, int> _conjunctionIndex = new Dictionary<MemberDecl, int>();
+        private readonly Dictionary<MemberDecl, int> _calcIndex = new Dictionary<MemberDecl, int>();
+
         private Dictionary<MemberDecl, ConjunctionData> _removedBrokenItems = new Dictionary<MemberDecl, ConjunctionData>();
+        private Dictionary<MemberDecl, CalcData> _simplifiedCalcs = new Dictionary<MemberDecl, CalcData>();
 
         public SimultaneousAllTypeRemover(Program program)
         {
@@ -873,6 +1016,9 @@ namespace shorty
                     _allConjunctions[member].Add(conjunction);
                 _removedBrokenItems.Remove(member);
             }
+            else if (_simplifiedCalcs.ContainsKey(member)) {
+                _simplifiedCalcs[member].FailureOccured();
+            }
             else
             {
                 throw new Exception("cant find member in removedOnRun");
@@ -886,6 +1032,7 @@ namespace shorty
                 members.AddRange(_removedItemsOnRun.Keys);
                 members.AddRange(_wildCardDecreasesRemovedOnRun.Keys);
                 members.AddRange(_removedBrokenItems.Keys);
+                members.AddRange(_simplifiedCalcs.Keys);
                 return FindMethod(errorInfo.Tok.pos, members);
             }
             catch (AlreadyRemovedException) {
@@ -968,7 +1115,19 @@ namespace shorty
                 Reset();
             }
             GatherConjunctionSimpData(simpData);
+            GatherCalcSimpData(simpData);
             return simpData;
+        }
+
+        private void GatherCalcSimpData(SimplificationWrapData simpData)
+        {
+            foreach (var allCalc in _allCalcs.Values) {
+                foreach (var calc in allCalc) {
+                    simpData.SimplifiedCalcs.Item1.AddRange(calc.RemovableCalcParts.Lines);
+                    simpData.SimplifiedCalcs.Item2.AddRange(calc.RemovableCalcParts.Hints);
+                    simpData.SimplifiedCalcs.Item3.AddRange(calc.RemovableCalcParts.CalcOps);
+                }
+            }
         }
 
         private void GatherConjunctionSimpData(SimplificationWrapData simpData)
@@ -1081,7 +1240,7 @@ namespace shorty
                 _conjunctionIndex.Add(member, 0);
             var index = _conjunctionIndex[member];
             if (asserts.Count + invariants.Count == 0 || index > asserts.Count + invariants.Count)
-                return true;
+                return SimplifyCalcs(member);
             //see if there is a conj already made and not finished
             if (_allConjunctions.ContainsKey(member)) {
                 foreach (var conj in _allConjunctions[member]) {
@@ -1102,7 +1261,7 @@ namespace shorty
                 InitialiseItem(invariants[index - asserts.Count], member);
                 return false;
             }
-            else return true;
+            else return SimplifyCalcs(member);
             
         }
 
@@ -1129,40 +1288,6 @@ namespace shorty
             return new ConjunctionData(member, simpItem);           
         }
 
-
-        private void GatherSimpData(SimplificationWrapData simpData)
-        {
-            //everything still in itemsRemoved should be used for return
-            foreach (var simplificationItemInMethod in _removedItemsOnRun.Values) {
-                var item = simplificationItemInMethod.GetItem();
-                if (item is Wrap<Statement>) {
-                    var wrap = (Wrap<Statement>) item;
-                    if (wrap.Removable is AssertStmt)
-                        simpData.RemovableAsserts.Add(wrap);
-                    else if (wrap.Removable is UpdateStmt)
-                        simpData.RemovableLemmaCalls.Add(wrap);
-                    else if (wrap.Removable is CalcStmt)
-                        simpData.RemovableCalcs.Add(wrap);
-                    else
-                        throw new UnableToDetermineTypeException();
-                }
-                else if (item is Wrap<MaybeFreeExpression>) {
-                    var wrap = (Wrap<MaybeFreeExpression>) item;
-                    simpData.RemovableInvariants.Add(wrap);
-                }
-                else if (item is Wrap<Expression>) {
-                    var wrap = (Wrap<Expression>) item;
-                    simpData.RemovableDecreases.Add(wrap);
-                }
-                else throw new UnableToDetermineTypeException();
-            }
-            foreach (var wildCard in _wildCardDecreasesRemovedOnRun.Values) {
-                simpData.RemovableWildCardDecreaseses.Add(wildCard);
-            }
-            //conjunctions are not done here - all gathered at end 
-            //TODO if we need to get the conjunction subExpressions that can be removed get them here.
-        }
-
         public Wrap<T> CombineAndInsertBrokenWraps<T>(Wrap<T> originalItem, List<SimplificationItemInMethod> brokenSimpItems)
         {
             var brokenItemWraps = new List<Wrap<T>>();
@@ -1176,12 +1301,95 @@ namespace shorty
             return Simplifier.CombineToNewWrap(originalItem, brokenItemWraps); // <--The item gets inserted to the parent inside here
         }
 
+        private bool SimplifyCalcs(MemberDecl member)
+        {
+            var calcs = _allRemovableTypes.RemovableTypesInMethods[member].Calcs;
+            if (calcs.Count == 0) return true;
+
+            if (!_calcIndex.ContainsKey(member)) {
+                _calcIndex.Add(member, 0);
+            }
+            var index = _calcIndex[member];
+            if (index >= calcs.Count) return true;
+            
+            var calcData = GetCalcData(member);
+
+            if (calcData.Finished) {
+                _calcIndex[member]++;
+                if (_calcIndex[member] >= calcs.Count)
+                    return true;
+            }
+
+            calcData.RemoveNext();
+            _simplifiedCalcs.Add(member, calcData);
+            return false;
+        }
+
+        private CalcData GetCalcData(MemberDecl member)
+        {
+            var calcs = _allRemovableTypes.RemovableTypesInMethods[member].Calcs;
+            var index = _calcIndex[member];
+
+            if (!_allCalcs.ContainsKey(member))
+                _allCalcs.Add(member, new List<CalcData>());
+
+            if (_allCalcs[member].Count == index)
+                _allCalcs[member].Add(new CalcData(calcs[index].Removable as CalcStmt));
+
+            var calcData = _allCalcs[member][index];
+            return calcData;
+        }
+
+
+        private void GatherSimpData(SimplificationWrapData simpData)
+        {
+            //everything still in itemsRemoved should be used for return
+            foreach (var simplificationItemInMethod in _removedItemsOnRun.Values) {
+                var item = simplificationItemInMethod.GetItem();
+                if (item is Wrap<Statement>) {
+                    var wrap = (Wrap<Statement>) item;
+                    if (wrap.Removable is AssertStmt) {
+                        simpData.RemovableAsserts.Add(wrap);
+                        _allRemovableTypes.RemoveAssert(wrap);
+                    }
+                    else if (wrap.Removable is UpdateStmt) {
+                        simpData.RemovableLemmaCalls.Add(wrap);
+                        _allRemovableTypes.RemoveLemmaCall(wrap);
+                    }
+                    else if (wrap.Removable is CalcStmt) {
+                        simpData.RemovableCalcs.Add(wrap);
+                        _allRemovableTypes.RemoveCalc(wrap);
+                    }
+                    else
+                        throw new UnableToDetermineTypeException();
+                }
+                else if (item is Wrap<MaybeFreeExpression>) {
+                    var wrap = (Wrap<MaybeFreeExpression>) item;
+                    simpData.RemovableInvariants.Add(wrap);
+                    _allRemovableTypes.RemoveInvariant(wrap);
+                }
+                else if (item is Wrap<Expression>) {
+                    var wrap = (Wrap<Expression>) item;
+                    simpData.RemovableDecreases.Add(wrap);
+                    _allRemovableTypes.RemoveDecreases(wrap);
+                }
+                else throw new UnableToDetermineTypeException();
+            }
+            foreach (var wildCard in _wildCardDecreasesRemovedOnRun.Values) {
+                simpData.RemovableWildCardDecreaseses.Add(wildCard);
+                _allRemovableTypes.RemoveWildCardDecreases(wildCard);
+            }
+            //conjunctions are not done here - all gathered at end 
+            //TODO if we need to get the conjunction subExpressions that can be removed get them here.
+        }
+
         private void Reset()
         {
             AlreadyReAddedMembers = new List<MemberDecl>();
             _removedItemsOnRun = new Dictionary<MemberDecl, SimplificationItemInMethod>();
             _wildCardDecreasesRemovedOnRun = new Dictionary<MemberDecl, WildCardDecreases>();
             _removedBrokenItems = new Dictionary<MemberDecl, ConjunctionData>();
+            _simplifiedCalcs = new Dictionary<MemberDecl, CalcData>();
             
         }
 
