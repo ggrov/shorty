@@ -260,7 +260,7 @@ namespace shorty
             line.ParentList.Insert(lineIndex, line.Removable);
             hint.ParentList.Insert(hintIndex, hint.Removable);
             op.ParentList.Insert(opIndex, op.Removable);
-            //TODO: try and remove everything inside the hint
+            //possible improvement: try and remove everything inside the hint
             return false;
         }
 
@@ -616,7 +616,7 @@ namespace shorty
             }
             simpData.SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(calcLines, calcBlocks, calcOps);
             return simpData;
-            //TODO remove things from the _allRemovableTypes
+            //TODO remove things from the _allRemovableTypes. Would that even be worth it in this use case?
         }
 
         private List<T> RemoveItems<T>(List<Wrap<T>> wraps)
@@ -1405,7 +1405,7 @@ namespace shorty
                 _allRemovableTypes.RemoveWildCardDecreases(wildCard);
             }
             //conjunctions are not done here - all gathered at end 
-            //TODO if we need to get the conjunction subExpressions that can be removed get them here.
+            //TODO if the removed conjunction subExpressions are needed they can be retrieved here
         }
 
         private void Reset()
@@ -1454,7 +1454,7 @@ namespace shorty
         {
             var binExpr = GetExpr(wrap.Removable) as BinaryExpr;
             if (binExpr != null)
-                if (binExpr.Op != BinaryExpr.Opcode.And) return null; //TODO simplify when there is an implies
+                if (binExpr.Op != BinaryExpr.Opcode.And) return null; //Possible improvement: simplify when there is an implies by going deeper
 
             wrap.Remove();
             return !_verifier.IsProgramValid(_program) ? SimplifyItem(wrap) : null;

@@ -10,7 +10,7 @@ using Bpl = Microsoft.Boogie;
 namespace shorty
 {
     [TestFixture]
-    class ShortyTest
+    internal class ShortyTest
     {
         private void Initialise()
         {
@@ -23,7 +23,7 @@ namespace shorty
             Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
             Bpl.OutputPrinter printer = new InvisibleConsolePrinter();
             Bpl.ExecutionEngine.printer = printer;
-//            Contract.ContractFailed += ShortyMain.ContractFailureHandler;
+            Contract.ContractFailed += ShortyMain.ContractFailureHandler;
         }
 
         private Program GetProgram(string fileName)
@@ -191,21 +191,7 @@ namespace shorty
             var program = GetProgram("ListCopy.dfy");
             
             var shorty = GetShorty(SimpleCloner.CloneProgram(program));
-//            var shorty2 = GetShorty(SimpleCloner.CloneProgram(program));
-//            shorty2.FindRemovableInvariants();
-//            shorty2.GetSimplifiedInvariants();
             var data = shorty.FastRemoveAllRemovables();
-//
-//            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\allType.dfy"))
-//            {
-//                shorty.PrintProgram(tw);
-//            }
-//            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\oaat.dfy"))
-//            {
-//                shorty2.PrintProgram(tw);
-//            }
-
-
             Assert.AreEqual(1, data.SimplifiedInvariants.Count);
         }
 
@@ -234,7 +220,7 @@ namespace shorty
             CompareAllRemovals(GetProgram("Calc.dfy"));
         }
 
-        [Test] //[Ignore("Takes a very long time")]
+        [Test] [Ignore("Takes a very long time")]
         public void ThouroughTestDifferentRemovals()
         {
             Initialise();

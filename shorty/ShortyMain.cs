@@ -282,7 +282,7 @@ namespace shorty
             }
             return betterSolutionFound;
         }
-        //TODO move 
+
         public static void ContractFailureHandler(Object obj, ContractFailedEventArgs args)
         {
             throw new ContractFailedException();

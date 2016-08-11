@@ -634,7 +634,7 @@ namespace shorty
             Contract.ContractFailed -= ContractFailureHandler;
         }
 
-        public static void ContractFailureHandler(Object obj, ContractFailedEventArgs args)
+        private static void ContractFailureHandler(Object obj, ContractFailedEventArgs args)
         {
             throw new ContractFailedException();
         }
