@@ -83,40 +83,34 @@ namespace shorty
         {
             var removableTokenData = new List<DaryResult>();
 
-            foreach (var removableAssert in simpData.RemovableAsserts)
-            {
+            foreach (var removableAssert in simpData.RemovableAsserts) {
                 removableTokenData.Add(new DaryResult(removableAssert.Tok, removableAssert.EndTok, "Assert Statement"));
             }
-            foreach (var invariant in simpData.RemovableInvariants)
-            {
+            foreach (var invariant in simpData.RemovableInvariants) {
                 removableTokenData.Add(new DaryResult(invariant.E.tok, invariant.E.AsStringLiteral().Length, "Invariant"));
             }
-            foreach (var removableDecrease in simpData.RemovableDecreases)
-            {
+            foreach (var removableDecrease in simpData.RemovableDecreases) {
                 removableTokenData.Add(new DaryResult(removableDecrease.tok, removableDecrease.AsStringLiteral().Length, "Decreases Expression"));
             }
-            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls)
-            {
+            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls) {
                 removableTokenData.Add(new DaryResult(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
             }
-            foreach (var removableCalc in simpData.RemovableCalcs)
-            {
+            foreach (var removableCalc in simpData.RemovableCalcs) {
                 removableTokenData.Add(new DaryResult(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
             }
-            foreach (var expression in simpData.SimplifiedCalcs.Item1)
-            {
-
+            foreach (var line in simpData.SimplifiedCalcs.Item1) {
+                removableTokenData.Add(new DaryResult(line.tok, line.AsStringLiteral().Length, "Calc Line"));
             }
-            foreach (var blockStmt in simpData.SimplifiedCalcs.Item2)
-            { //TODO pair up the hints and calcs - start pos will be start of calcop, end will be somethign.
-
+            foreach (var hint in simpData.SimplifiedCalcs.Item2) {
+                var index = simpData.SimplifiedCalcs.Item2.IndexOf(hint);
+                var calcOp = simpData.SimplifiedCalcs.Item3[index];
+                //TODO find position of calcOp - this will probably fail as it is
+                var result = new DaryResult(hint.Tok, hint.EndTok, "CalcStmt Hint");
             }
-            foreach (var simplifiedAssert in simpData.SimplifiedAsserts)
-            {
+            foreach (var simplifiedAssert in simpData.SimplifiedAsserts) {
                 removableTokenData.Add(new DaryResult(simplifiedAssert.Item1.Tok, simplifiedAssert.Item1.EndTok, "Assert Statement", simplifiedAssert.Item2));
             }
-            foreach (var simplifiedInvariant in simpData.SimplifiedInvariants)
-            {
+            foreach (var simplifiedInvariant in simpData.SimplifiedInvariants) {
                 removableTokenData.Add(new DaryResult(simplifiedInvariant.Item1.E.tok, simplifiedInvariant.Item1.E.AsStringLiteral().Length, "Invariant", simplifiedInvariant.Item2));
             }
 
@@ -517,11 +511,21 @@ namespace shorty
         }
     }
 
+    /// <summary>
+    /// A simple class with a variable Stop.
+    /// An instance of this is passed to dary and
+    /// setting Stop to true will terminate Dary after
+    /// its next verification.
+    /// </summary>
     public class StopChecker
     {
         public bool Stop = false;
     }
 
+    /// <summary>
+    /// A class containing the information returned from dary that
+    /// can be used to remove and replace dafny code
+    /// </summary>
     public class DaryResult
     {
         public int StartPos { get; private set; }
@@ -564,6 +568,10 @@ namespace shorty
 
     }
 
+    /// <summary>
+    /// Dary removes unnecessary annotations from dafny programs and returns
+    /// information allowing them to be removed from dafny source code
+    /// </summary>
     public class Dary
     {
         private readonly StopChecker _stopChecker;
@@ -574,11 +582,18 @@ namespace shorty
         private int _errorTrace;
         private Bpl.OutputPrinter _printer;
 
+        /// <param name="stopChecker">A StopChecker object to alert Dary to halt termination</param>
         public Dary(StopChecker stopChecker)
         {
             _stopChecker = stopChecker;
         }
 
+        /// <summary>
+        /// Finds unnecessary annotations throughout the whole dafny
+        /// program and returns information on their locations
+        /// </summary>
+        /// <param name="program">The unresolved dafny program</param>
+        /// <returns>A list of DaryResult objects</returns>
         public List<DaryResult> ProcessProgram(Program program)
         {
             Status = StatusEnum.Running;
@@ -590,6 +605,13 @@ namespace shorty
             return results;
         }
 
+        /// <summary>
+        /// Finds unnecessary annotations throughout the specified members
+        /// in the dafny program and returns information on their locations
+        /// </summary>
+        /// <param name="program">The unresolved dafny program</param>
+        /// <param name="members">The members to be checked for dead annotations</param>
+        /// <returns>A list of DaryResult objects</returns>
         public List<DaryResult> ProcessMembers(Program program, List<MemberDecl> members)
         {
             Status = StatusEnum.Running;
