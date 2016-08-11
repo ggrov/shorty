@@ -4,6 +4,7 @@ using System.Collections.ObjectModel;
 using System.Diagnostics.Contracts;
 using System.IO;
 using System.Linq;
+using System.Net;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 
@@ -451,6 +452,72 @@ namespace shorty
                     return member;
             }
             return null;
+        }
+    }
+
+    public class RemovableTokenData
+    {
+        public Bpl.IToken StartToken { get; private set; }
+        public Bpl.IToken EndToken { get; private set; }
+        public string TypeOfRemovable { get; private set; }
+
+        public RemovableTokenData(Bpl.IToken starToken, Bpl.IToken endToken, string typeOfRemovable)
+        {
+            StartToken = starToken;
+            EndToken = endToken;
+            TypeOfRemovable = typeOfRemovable;
+        }
+
+        public static List<RemovableTokenData> GetTokens(SimplificationData simpData)
+        {
+            List<RemovableTokenData> removableTokenData = new List<RemovableTokenData>();
+
+            foreach (var removableAssert in simpData.RemovableAsserts) {
+                removableTokenData.Add(new RemovableTokenData(removableAssert.Tok, removableAssert.EndTok, "Assert Statement"));
+            }
+            foreach (var invariant in simpData.RemovableInvariants) {
+                //removableTokenData.Add(new RemovableTokenData(invariant.E.tok, invariant.E.)); //TODO: figure out how to get the end token/position
+            }
+            foreach (var removableDecrease in simpData.RemovableDecreases) {
+                
+            }
+            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls) {
+                removableTokenData.Add(new RemovableTokenData(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
+            }
+            foreach (var removableCalc in simpData.RemovableCalcs) {
+                removableTokenData.Add(new RemovableTokenData(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
+            }
+            foreach (var expression in simpData.SimplifiedCalcs.Item1) {
+                
+            }
+            foreach (var blockStmt in simpData.SimplifiedCalcs.Item2) { //TODO pair up the hints and calcs.
+                
+            }
+            foreach (var simplifiedAssert in simpData.SimplifiedAsserts) {
+                //TODO get the removable parts of simplified asserts.
+            }
+            foreach (var simplifiedInvariant in simpData.SimplifiedInvariants) {
+                
+            }
+
+            return removableTokenData;
+        }
+    }
+
+    public class Dary
+    {
+        public List<RemovableTokenData> PurifyAll(Program program)
+        {
+            var shorty = new Shorty(program);
+
+            return RemovableTokenData.GetTokens(shorty.FastRemoveAllRemovables());
+        }
+
+        public List<RemovableTokenData> PurifyMethod(Program program, MemberDecl member)
+        {
+            var methodRemover = new MethodRemover(program);
+            var removables = methodRemover.FullSimplify(member);
+            return RemovableTokenData.GetTokens(removables);
         }
     }
 }

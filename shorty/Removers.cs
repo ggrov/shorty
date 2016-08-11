@@ -828,7 +828,7 @@ namespace shorty
         }
     }
 
-    class RemovableCalcParts //TODO use this more
+    class RemovableCalcParts //TODO: use this more
     {
         public List<Expression> Lines = new List<Expression>();
         public List<BlockStmt> Hints = new List<BlockStmt>();
@@ -841,7 +841,7 @@ namespace shorty
         
         public RemovableCalcParts RemovableCalcParts { get; private set; }
         public bool Finished { get; private set; }
-        private int _lineIndex = 1, _hintIndex = 1; //start at 1 as first shouldn't be removed
+        private int _lineIndex = 1, _hintIndex = 0; //lines start at 1 as first shouldn't be removed
         public readonly List<Expression> RemovedLines = new List<Expression>();
         public readonly List<BlockStmt> RemovedHints = new List<BlockStmt>();
         public readonly List<CalcStmt.CalcOp> RemovedCalcs = new List<CalcStmt.CalcOp>();
@@ -902,18 +902,31 @@ namespace shorty
                     RemovableCalcParts.Hints.Add(_lastRemovedHint);
                     RemovableCalcParts.CalcOps.Add(_lastRemovedCalcOp);
                 }
+                else if (_lastHintBody != null) {
+                    RefillLastHintBody();
+                    RemovableCalcParts.Hints.Add(_lastRemovedHint);
+                    RemovableCalcParts.CalcOps.Add(_lastRemovedCalcOp);
+                }
             }
+
+            _lastRemovedLine = null;
+            _lastHintBody = null;
+            _lastRemovedCalcOp = null;
         }
 
         private void EmptyNextHint()
         {
-            if (_hintIndex >= _calcStmt.Hints.Count - 1) //TODO only empty if its not already empty
+            if (_hintIndex >= _calcStmt.Hints.Count - 2)
                 Finished = true;
-            else {
+            else if (_calcStmt.Hints[_hintIndex].Body.Count == 0) {
                 _hintIndex++;
+                EmptyNextHint();
+            }
+            else {
                 EmptyHintBody(_calcStmt.Hints[_hintIndex]);
                 _lastRemovedHint = _calcStmt.Hints[_hintIndex];
                 _lastRemovedCalcOp = _calcStmt.StepOps[_hintIndex];
+                _hintIndex++;
             }
         }
         
@@ -951,9 +964,9 @@ namespace shorty
         private void UpdateIndexes()
         {
             _hintIndex++;
-            if (_hintIndex <= _calcStmt.Hints.Count - 2) return;
+            if (_hintIndex <= _calcStmt.Hints.Count - 1) return;
             // All hints have been attempted to be removed with the line - this line cannot be removed
-            _hintIndex = 1;
+            _hintIndex = 0;
             _lineIndex++;
             if (_lineIndex >= _calcStmt.Lines.Count - 2)
                 _linesComplete = true;
@@ -963,6 +976,8 @@ namespace shorty
         {
             foreach (var statement in _lastHintBody)
                 _calcStmt.Hints[_hintIndex].Body.Add(statement);
+
+            _lastHintBody = null;
         }
     }
 

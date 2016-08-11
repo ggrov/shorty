@@ -30,14 +30,14 @@ lemma prop_add_comm(x: natr, y: natr)
     case Succ(x') =>
       calc {
         add(x,y);
-       // ==
-        //{ assert x == Succ(x'); }
-        //add(Succ(x'), y);
-        //==
-        //Succ(add(x', y));
+        ==
+        { assert x == Succ(x'); }
+        add(Succ(x'), y);
+        ==
+        Succ(add(x', y));
         =={ prop_add_comm(x', y); }
-        //Succ(add(y, x'));
-        //== 
+        Succ(add(y, x'));
+        == 
         add(y, Succ(x'));
       }
   }
