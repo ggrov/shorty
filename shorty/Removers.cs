@@ -1132,7 +1132,7 @@ namespace shorty
             while (!finished) {
                 finished = RemoveAnItemFromEachMethod(simpItems);
                 _index++;
-                if (_stopChecker.Stop) {
+                if (_stopChecker != null && _stopChecker.Stop) {
                     break;
                 }
                 VerifyProgram();
