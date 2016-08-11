@@ -999,6 +999,7 @@ namespace shorty
 
         private Dictionary<MemberDecl, ConjunctionData> _removedBrokenItems = new Dictionary<MemberDecl, ConjunctionData>();
         private Dictionary<MemberDecl, CalcData> _simplifiedCalcs = new Dictionary<MemberDecl, CalcData>();
+        private StopChecker _stopChecker;
 
         public SimultaneousAllTypeRemover(Program program)
         {
@@ -1076,6 +1077,12 @@ namespace shorty
             
         }
 
+        public SimplificationData Remove(AllRemovableTypes allRemovableTypes, StopChecker stopChecker)
+        {
+            _stopChecker = stopChecker;
+            return Remove(allRemovableTypes);
+        }
+
         public SimplificationData Remove(AllRemovableTypes allRemovableTypes)
         {
             _allRemovableTypes = allRemovableTypes;
@@ -1125,6 +1132,9 @@ namespace shorty
             while (!finished) {
                 finished = RemoveAnItemFromEachMethod(simpItems);
                 _index++;
+                if (_stopChecker.Stop) {
+                    break;
+                }
                 VerifyProgram();
                 GatherSimpData(simpData);
                 Reset();

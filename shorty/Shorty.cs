@@ -10,9 +10,9 @@ using Bpl = Microsoft.Boogie;
 
 namespace shorty
 {
-    class NotValidException : Exception {}
+    internal class NotValidException : Exception {}
 
-    public class Shorty
+    internal class Shorty
     {
         public Program Program { get; private set; }
 
@@ -85,6 +85,24 @@ namespace shorty
         {
             var remover = new SimultaneousAllTypeRemover(Program);
             var simpData = remover.Remove(_allRemovableTypes);
+            return simpData;
+        }
+        public SimplificationData FastRemoveAllRemovables(StopChecker stopChecker)
+        {
+            var remover = new SimultaneousAllTypeRemover(Program);
+            var simpData = remover.Remove(_allRemovableTypes, stopChecker);
+            return simpData;
+        }
+        public SimplificationData FastRemoveAllInMethods(StopChecker stopChecker, List<MemberDecl> members)
+        {
+            var remover = new SimultaneousAllTypeRemover(Program);
+            AllRemovableTypes newAllRemovables = new AllRemovableTypes();
+            foreach (var member in members) {
+                if(!_allRemovableTypes.RemovableTypesInMethods.ContainsKey(member))
+                    throw new Exception("Could not find the method");
+                newAllRemovables.RemovableTypesInMethods.Add(member, _allRemovableTypes.RemovableTypesInMethods[member]);
+            }
+            var simpData = remover.Remove(newAllRemovables, stopChecker);
             return simpData;
         }
 
@@ -221,7 +239,7 @@ namespace shorty
         #endregion
     }
 
-    public class AllRemovableTypes
+    internal class AllRemovableTypes
     {
         public readonly Dictionary<MemberDecl, RemovableTypesInMember> RemovableTypesInMethods = new Dictionary<MemberDecl, RemovableTypesInMember>();
 
@@ -455,49 +473,80 @@ namespace shorty
         }
     }
 
-    public class RemovableTokenData
+    public class StopChecker
     {
-        public Bpl.IToken StartToken { get; private set; }
-        public Bpl.IToken EndToken { get; private set; }
-        public string TypeOfRemovable { get; private set; }
+        public bool Stop = false;
+    }
 
-        public RemovableTokenData(Bpl.IToken starToken, Bpl.IToken endToken, string typeOfRemovable)
+    public class DaryResult
+    {
+        public int StartPos { get; private set; }
+        public int Length { get; private set; }
+        public string TypeOfRemovable { get; private set; }
+        public object Replace { get; private set; }
+
+        public DaryResult(Bpl.IToken startToken, Bpl.IToken endToken, string typeOfRemovable)
         {
-            StartToken = starToken;
-            EndToken = endToken;
+            StartPos = startToken.pos;
+            Length = endToken.pos - startToken.pos;
             TypeOfRemovable = typeOfRemovable;
+            Replace = null;
         }
 
-        public static List<RemovableTokenData> GetTokens(SimplificationData simpData)
+        public DaryResult(Bpl.IToken startToken, Bpl.IToken endToken, string typeOfRemovable, object replace)
         {
-            List<RemovableTokenData> removableTokenData = new List<RemovableTokenData>();
+            StartPos = startToken.pos;
+            Length = endToken.pos - startToken.pos;
+            TypeOfRemovable = typeOfRemovable;
+            Replace = replace;
+        }
+
+        public DaryResult(Bpl.IToken startToken, int length, string typeOfRemovable)
+        {
+            StartPos = startToken.pos;
+            Length = length;
+            TypeOfRemovable = typeOfRemovable;
+            Replace = null;
+        }
+
+        public DaryResult(Bpl.IToken startToken, int length, string typeOfRemovable, object replace)
+        {
+            StartPos = startToken.pos;
+            Length = length;
+            TypeOfRemovable = typeOfRemovable;
+            Replace = replace;
+        }
+
+        public static List<DaryResult> GetTokens(SimplificationData simpData)
+        {
+            var removableTokenData = new List<DaryResult>();
 
             foreach (var removableAssert in simpData.RemovableAsserts) {
-                removableTokenData.Add(new RemovableTokenData(removableAssert.Tok, removableAssert.EndTok, "Assert Statement"));
+                removableTokenData.Add(new DaryResult(removableAssert.Tok, removableAssert.EndTok, "Assert Statement"));
             }
             foreach (var invariant in simpData.RemovableInvariants) {
-                //removableTokenData.Add(new RemovableTokenData(invariant.E.tok, invariant.E.)); //TODO: figure out how to get the end token/position
+                removableTokenData.Add(new DaryResult(invariant.E.tok, invariant.E.AsStringLiteral().Length, "Invariant"));
             }
             foreach (var removableDecrease in simpData.RemovableDecreases) {
-                
+                removableTokenData.Add(new DaryResult(removableDecrease.tok, removableDecrease.AsStringLiteral().Length, "Decreases Expression"));
             }
             foreach (var removableLemmaCall in simpData.RemovableLemmaCalls) {
-                removableTokenData.Add(new RemovableTokenData(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
+                removableTokenData.Add(new DaryResult(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
             }
             foreach (var removableCalc in simpData.RemovableCalcs) {
-                removableTokenData.Add(new RemovableTokenData(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
+                removableTokenData.Add(new DaryResult(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
             }
             foreach (var expression in simpData.SimplifiedCalcs.Item1) {
                 
             }
-            foreach (var blockStmt in simpData.SimplifiedCalcs.Item2) { //TODO pair up the hints and calcs.
+            foreach (var blockStmt in simpData.SimplifiedCalcs.Item2) { //TODO pair up the hints and calcs - start pos will be start of calcop, end will be somethign.
                 
             }
             foreach (var simplifiedAssert in simpData.SimplifiedAsserts) {
-                //TODO get the removable parts of simplified asserts.
+                removableTokenData.Add(new DaryResult(simplifiedAssert.Item1.Tok, simplifiedAssert.Item1.EndTok, "Assert Statement", simplifiedAssert.Item2));
             }
             foreach (var simplifiedInvariant in simpData.SimplifiedInvariants) {
-                
+                removableTokenData.Add(new DaryResult(simplifiedInvariant.Item1.E.tok, simplifiedInvariant.Item1.E.AsStringLiteral().Length, "Invariant", simplifiedInvariant.Item2));
             }
 
             return removableTokenData;
@@ -506,18 +555,75 @@ namespace shorty
 
     public class Dary
     {
-        public List<RemovableTokenData> PurifyAll(Program program)
-        {
-            var shorty = new Shorty(program);
+        private readonly StopChecker _stopChecker;
+        public enum StatusEnum {Idle, Running}
+        public StatusEnum Status = StatusEnum.Idle;
 
-            return RemovableTokenData.GetTokens(shorty.FastRemoveAllRemovables());
+        private int _verifySnapshots;
+        private int _errorTrace;
+        private Bpl.OutputPrinter _printer;
+
+        public Dary(StopChecker stopChecker)
+        {
+            _stopChecker = stopChecker;
         }
 
-        public List<RemovableTokenData> PurifyMethod(Program program, MemberDecl member)
+        public List<DaryResult> ProcessProgram(Program program)
         {
-            var methodRemover = new MethodRemover(program);
-            var removables = methodRemover.FullSimplify(member);
-            return RemovableTokenData.GetTokens(removables);
+            ApplyOptions();
+            var shorty = new Shorty(program);
+            Status = StatusEnum.Running;
+            var results = DaryResult.GetTokens(shorty.FastRemoveAllRemovables(_stopChecker));
+            Status = StatusEnum.Idle;
+            RestoreOptions();
+            return results;
+        }
+
+        public List<DaryResult> ProcessMembers(Program program, List<MemberDecl> members)
+        {
+            ApplyOptions();
+            List<DaryResult> results;
+            if (members.Count == 1) {
+                var member = members[0];
+                var methodRemover = new MethodRemover(program);
+                var removables = methodRemover.FullSimplify(member);
+                results = DaryResult.GetTokens(removables);
+            }
+            else {
+                var shorty = new Shorty(program);
+                var removables = shorty.FastRemoveAllInMethods(_stopChecker, members);
+                results = DaryResult.GetTokens(removables);
+            }
+            RestoreOptions();
+            return results;
+        }
+
+        private void ApplyOptions()
+        {
+            _errorTrace = DafnyOptions.O.ErrorTrace;
+            DafnyOptions.O.ErrorTrace = 0;
+
+            _verifySnapshots = DafnyOptions.O.VerifySnapshots;
+            DafnyOptions.O.VerifySnapshots = 1;
+
+            _printer = Bpl.ExecutionEngine.printer;
+            Bpl.ExecutionEngine.printer = new InvisibleConsolePrinter();
+
+            Contract.ContractFailed += ContractFailureHandler;
+        }
+
+        private void RestoreOptions()
+        {
+            DafnyOptions.O.ErrorTrace = _errorTrace;
+            DafnyOptions.O.VerifySnapshots = _verifySnapshots;
+            Bpl.ExecutionEngine.printer = _printer;
+
+            Contract.ContractFailed -= ContractFailureHandler;
+        }
+
+        public static void ContractFailureHandler(Object obj, ContractFailedEventArgs args)
+        {
+            throw new ContractFailedException();
         }
     }
 }
