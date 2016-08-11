@@ -79,6 +79,50 @@ namespace shorty
             dafnyPrinter.PrintProgram(Program, false);
         }
 
+        public static List<DaryResult> GetTokens(SimplificationData simpData)
+        {
+            var removableTokenData = new List<DaryResult>();
+
+            foreach (var removableAssert in simpData.RemovableAsserts)
+            {
+                removableTokenData.Add(new DaryResult(removableAssert.Tok, removableAssert.EndTok, "Assert Statement"));
+            }
+            foreach (var invariant in simpData.RemovableInvariants)
+            {
+                removableTokenData.Add(new DaryResult(invariant.E.tok, invariant.E.AsStringLiteral().Length, "Invariant"));
+            }
+            foreach (var removableDecrease in simpData.RemovableDecreases)
+            {
+                removableTokenData.Add(new DaryResult(removableDecrease.tok, removableDecrease.AsStringLiteral().Length, "Decreases Expression"));
+            }
+            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls)
+            {
+                removableTokenData.Add(new DaryResult(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
+            }
+            foreach (var removableCalc in simpData.RemovableCalcs)
+            {
+                removableTokenData.Add(new DaryResult(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
+            }
+            foreach (var expression in simpData.SimplifiedCalcs.Item1)
+            {
+
+            }
+            foreach (var blockStmt in simpData.SimplifiedCalcs.Item2)
+            { //TODO pair up the hints and calcs - start pos will be start of calcop, end will be somethign.
+
+            }
+            foreach (var simplifiedAssert in simpData.SimplifiedAsserts)
+            {
+                removableTokenData.Add(new DaryResult(simplifiedAssert.Item1.Tok, simplifiedAssert.Item1.EndTok, "Assert Statement", simplifiedAssert.Item2));
+            }
+            foreach (var simplifiedInvariant in simpData.SimplifiedInvariants)
+            {
+                removableTokenData.Add(new DaryResult(simplifiedInvariant.Item1.E.tok, simplifiedInvariant.Item1.E.AsStringLiteral().Length, "Invariant", simplifiedInvariant.Item2));
+            }
+
+            return removableTokenData;
+        }
+
         #endregion
 
         public SimplificationData FastRemoveAllRemovables()
@@ -517,40 +561,7 @@ namespace shorty
             Replace = replace;
         }
 
-        public static List<DaryResult> GetTokens(SimplificationData simpData)
-        {
-            var removableTokenData = new List<DaryResult>();
 
-            foreach (var removableAssert in simpData.RemovableAsserts) {
-                removableTokenData.Add(new DaryResult(removableAssert.Tok, removableAssert.EndTok, "Assert Statement"));
-            }
-            foreach (var invariant in simpData.RemovableInvariants) {
-                removableTokenData.Add(new DaryResult(invariant.E.tok, invariant.E.AsStringLiteral().Length, "Invariant"));
-            }
-            foreach (var removableDecrease in simpData.RemovableDecreases) {
-                removableTokenData.Add(new DaryResult(removableDecrease.tok, removableDecrease.AsStringLiteral().Length, "Decreases Expression"));
-            }
-            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls) {
-                removableTokenData.Add(new DaryResult(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
-            }
-            foreach (var removableCalc in simpData.RemovableCalcs) {
-                removableTokenData.Add(new DaryResult(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
-            }
-            foreach (var expression in simpData.SimplifiedCalcs.Item1) {
-                
-            }
-            foreach (var blockStmt in simpData.SimplifiedCalcs.Item2) { //TODO pair up the hints and calcs - start pos will be start of calcop, end will be somethign.
-                
-            }
-            foreach (var simplifiedAssert in simpData.SimplifiedAsserts) {
-                removableTokenData.Add(new DaryResult(simplifiedAssert.Item1.Tok, simplifiedAssert.Item1.EndTok, "Assert Statement", simplifiedAssert.Item2));
-            }
-            foreach (var simplifiedInvariant in simpData.SimplifiedInvariants) {
-                removableTokenData.Add(new DaryResult(simplifiedInvariant.Item1.E.tok, simplifiedInvariant.Item1.E.AsStringLiteral().Length, "Invariant", simplifiedInvariant.Item2));
-            }
-
-            return removableTokenData;
-        }
     }
 
     public class Dary
@@ -570,31 +581,33 @@ namespace shorty
 
         public List<DaryResult> ProcessProgram(Program program)
         {
+            Status = StatusEnum.Running;
             ApplyOptions();
             var shorty = new Shorty(program);
-            Status = StatusEnum.Running;
-            var results = DaryResult.GetTokens(shorty.FastRemoveAllRemovables(_stopChecker));
-            Status = StatusEnum.Idle;
+            var results = Shorty.GetTokens(shorty.FastRemoveAllRemovables(_stopChecker));
             RestoreOptions();
+            Status = StatusEnum.Idle;
             return results;
         }
 
         public List<DaryResult> ProcessMembers(Program program, List<MemberDecl> members)
         {
+            Status = StatusEnum.Running;
             ApplyOptions();
             List<DaryResult> results;
             if (members.Count == 1) {
                 var member = members[0];
                 var methodRemover = new MethodRemover(program);
                 var removables = methodRemover.FullSimplify(member);
-                results = DaryResult.GetTokens(removables);
+                results = Shorty.GetTokens(removables);
             }
             else {
                 var shorty = new Shorty(program);
                 var removables = shorty.FastRemoveAllInMethods(_stopChecker, members);
-                results = DaryResult.GetTokens(removables);
+                results = Shorty.GetTokens(removables);
             }
             RestoreOptions();
+            Status = StatusEnum.Idle;
             return results;
         }
 

@@ -55,7 +55,7 @@ namespace shorty
         }
     }
 
-    public class RemovableTypesInMember
+    internal class RemovableTypesInMember
     {
         public MemberDecl Member { get; private set; }
         public readonly List<Wrap<Statement>> Asserts = new List<Wrap<Statement>>();
@@ -71,7 +71,7 @@ namespace shorty
         }
     }
 
-    public class Wrap<T>
+    internal class Wrap<T>
     {
         public T Removable { get; protected set; }
         public List<T> ParentList { get; private set; }
@@ -120,7 +120,7 @@ namespace shorty
         }
     }
 
-    public class WildCardDecreases
+    internal class WildCardDecreases
     {
         public readonly Expression Expression;
         public Wrap<Expression> ExpressionWrap;
@@ -143,7 +143,7 @@ namespace shorty
         }
     }
 
-    public class CalcRemover
+    internal class CalcRemover
     {
         private readonly Program _program;
         private readonly SimpleVerifier _verifier = new SimpleVerifier();
@@ -273,7 +273,7 @@ namespace shorty
         }
     }
 
-    public interface IRemover
+    internal interface IRemover
     {
         List<Wrap<T>> Remove<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary);
     }
@@ -324,7 +324,7 @@ namespace shorty
     /// verification failed for reinserting the items on simultaneous 
     /// removal approaches
     /// </summary>
-    abstract class VerificationErrorInformationRetriever
+    internal abstract class VerificationErrorInformationRetriever
     {
         public abstract void ErrorInformation(ErrorInformation errorInfo);
 
@@ -469,7 +469,7 @@ namespace shorty
         }
     }
 
-    public class SimplificationWrapData
+    internal class SimplificationWrapData
     {
         public List<Wrap<Statement>> RemovableAsserts = new List<Wrap<Statement>>();
         public List<Wrap<MaybeFreeExpression>> RemovableInvariants = new List<Wrap<MaybeFreeExpression>>();
@@ -505,7 +505,7 @@ namespace shorty
         }
     }
 
-    public class SimplificationData
+    internal class SimplificationData
     {
         public List<AssertStmt> RemovableAsserts = new List<AssertStmt>();
         public List<MaybeFreeExpression> RemovableInvariants = new List<MaybeFreeExpression>();
@@ -517,7 +517,7 @@ namespace shorty
         public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifiedCalcs;
     }
 
-    public class WildCardDecreasesRemover
+    internal class WildCardDecreasesRemover
     {
         private readonly Program _program;
 
@@ -570,7 +570,7 @@ namespace shorty
         }
     }
 
-    public class MethodRemover
+    internal class MethodRemover
     {
         private readonly Program _program;
 
@@ -671,7 +671,7 @@ namespace shorty
         }
     }
 
-    class SimplificationItemInMethod
+    internal class SimplificationItemInMethod
     {
         private enum Item
         {
@@ -740,7 +740,7 @@ namespace shorty
         }
     }
 
-    class ConjunctionData
+    internal class ConjunctionData
     {
         private int _index;
         public List<SimplificationItemInMethod> Brokenitems { get; private set; }
@@ -828,14 +828,14 @@ namespace shorty
         }
     }
 
-    class RemovableCalcParts //TODO: use this more
+    internal class RemovableCalcParts //TODO: use this more
     {
         public List<Expression> Lines = new List<Expression>();
         public List<BlockStmt> Hints = new List<BlockStmt>();
         public List<CalcStmt.CalcOp> CalcOps = new List<CalcStmt.CalcOp>();
     }
 
-    class CalcData
+    internal class CalcData
     {
         private readonly CalcStmt _calcStmt;
         
@@ -981,9 +981,9 @@ namespace shorty
         }
     }
 
-    class UnableToDetermineTypeException : Exception{}
+    internal class UnableToDetermineTypeException : Exception { }
 
-    class SimultaneousAllTypeRemover : VerificationErrorInformationRetriever
+    internal class SimultaneousAllTypeRemover : VerificationErrorInformationRetriever
     {
         private readonly Program _program;
         private AllRemovableTypes _allRemovableTypes;
@@ -1425,7 +1425,7 @@ namespace shorty
         }
     }
 
-    class AlreadyRemovedException : Exception {}
+    internal class AlreadyRemovedException : Exception { }
 
     internal class Simplifier
     {

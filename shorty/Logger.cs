@@ -10,7 +10,7 @@ using Bpl = Microsoft.Boogie;
 
 namespace shorty
 {
-    class Logger
+    internal class Logger
     {
         public readonly List<Program> Programs;
         public readonly List<Program> InvalidPrograms = new List<Program>();
@@ -170,12 +170,12 @@ namespace shorty
 
     #region LogFinder Factories
 
-    public interface ILogFinderFactory
+    internal interface ILogFinderFactory
     {
         LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests);
     }
 
-    class AssertLogFinderFactory : ILogFinderFactory
+    internal class AssertLogFinderFactory : ILogFinderFactory
     {
         public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
         {
@@ -183,7 +183,7 @@ namespace shorty
         }
     }
 
-    class AssertSimpLogFinderFactory : ILogFinderFactory
+    internal class AssertSimpLogFinderFactory : ILogFinderFactory
     {
         public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
         {
@@ -191,7 +191,7 @@ namespace shorty
         }
     }
 
-    class InvariantLogFinderFactory : ILogFinderFactory
+    internal class InvariantLogFinderFactory : ILogFinderFactory
     {
         public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
         {
@@ -199,7 +199,7 @@ namespace shorty
         }
     }
 
-    class InvariantSimpLogFinderFactory : ILogFinderFactory
+    internal class InvariantSimpLogFinderFactory : ILogFinderFactory
     {
         public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
         {
@@ -207,7 +207,7 @@ namespace shorty
         }
     }
 
-    class LemmaCallLogFinderFactory: ILogFinderFactory
+    internal class LemmaCallLogFinderFactory : ILogFinderFactory
     {
         public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
         {
@@ -215,7 +215,7 @@ namespace shorty
         }
     }
 
-    class DecreasesLogFinderFactory : ILogFinderFactory
+    internal class DecreasesLogFinderFactory : ILogFinderFactory
     {
         public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
         {
@@ -223,14 +223,14 @@ namespace shorty
         }
     }
 
-    class CalcLogFinderFactory : ILogFinderFactory
+    internal class CalcLogFinderFactory : ILogFinderFactory
     {
         public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
         {
             return new CalcLogFinder(program, numberOfTests, runTimeTests);
         }
     }
-    class EverythingLogFinderFactory : ILogFinderFactory
+    internal class EverythingLogFinderFactory : ILogFinderFactory
     {
         public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
         {
@@ -243,7 +243,7 @@ namespace shorty
 
     #region LogFinders
 
-    public abstract class LogFinder
+    internal abstract class LogFinder
     {
         protected Program Program;
         private readonly int _numberOfTests;
@@ -344,7 +344,7 @@ namespace shorty
         public abstract int GetCount(Shorty shorty);
     }
 
-    class AssertLogFinder : LogFinder
+    internal class AssertLogFinder : LogFinder
     {
         public AssertLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -359,7 +359,7 @@ namespace shorty
         }
     }
 
-    class InvariantLogFinder : LogFinder
+    internal class InvariantLogFinder : LogFinder
     {
         public InvariantLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -374,7 +374,7 @@ namespace shorty
         }
     }
 
-    class DecreasesLogFinder : LogFinder
+    internal class DecreasesLogFinder : LogFinder
     {
         public DecreasesLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -389,7 +389,7 @@ namespace shorty
         }
     }
 
-    class LemmaCallLogFinder : LogFinder
+    internal class LemmaCallLogFinder : LogFinder
     {
         public LemmaCallLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -404,7 +404,7 @@ namespace shorty
         }
     }
 
-    class CalcLogFinder : LogFinder
+    internal class CalcLogFinder : LogFinder
     {
         public CalcLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -426,7 +426,7 @@ namespace shorty
         }
     }
 
-    abstract class SimpLogFinder : LogFinder
+    internal abstract class SimpLogFinder : LogFinder
     {
         public SimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -460,7 +460,7 @@ namespace shorty
         }
     }
 
-    class AssertSimpLogFinder : SimpLogFinder
+    internal class AssertSimpLogFinder : SimpLogFinder
     {
         public AssertSimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -486,7 +486,7 @@ namespace shorty
         }
     }
 
-    class InvariantSimpLogFinder : SimpLogFinder
+    internal class InvariantSimpLogFinder : SimpLogFinder
     {
         public InvariantSimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -512,7 +512,7 @@ namespace shorty
         }
     }
 
-    class EverythingLogFinder : LogFinder
+    internal class EverythingLogFinder : LogFinder
     {
         public EverythingLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
@@ -545,7 +545,7 @@ namespace shorty
 
     #endregion
 
-    class SimpleCloner
+    internal class SimpleCloner
     {
         public static Program CloneProgram(Program program)
         {
