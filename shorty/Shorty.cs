@@ -10,7 +10,7 @@ using Bpl = Microsoft.Boogie;
 
 namespace shorty
 {
-    internal class NotValidException : Exception {}
+    public class NotValidException : Exception {}
 
     internal class Shorty
     {
@@ -50,9 +50,8 @@ namespace shorty
         {
             Contract.Requires(program != null);
             Program = program;
-            if (!IsProgramValid()) {
+            if (!IsProgramValid())
                 throw new NotValidException();
-            }
             var removalTypeFinder = new RemovableTypeFinder(program);
             _allRemovableTypes = removalTypeFinder.FindRemovables();
             Remover = remover;
@@ -83,37 +82,25 @@ namespace shorty
         {
             var removableTokenData = new List<DaryResult>();
 
-            foreach (var removableAssert in simpData.RemovableAsserts) {
+            foreach (var removableAssert in simpData.RemovableAsserts)
                 removableTokenData.Add(new DaryResult(removableAssert.Tok, removableAssert.EndTok, "Assert Statement"));
-            }
-            foreach (var invariant in simpData.RemovableInvariants) {
+            foreach (var invariant in simpData.RemovableInvariants)
                 removableTokenData.Add(new DaryResult(invariant.E.tok, invariant.E.AsStringLiteral().Length, "Invariant"));
-            }
-            foreach (var removableDecrease in simpData.RemovableDecreases) {
+            foreach (var removableDecrease in simpData.RemovableDecreases)
                 removableTokenData.Add(new DaryResult(removableDecrease.tok, removableDecrease.AsStringLiteral().Length, "Decreases Expression"));
-            }
-            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls) {
+            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls)
                 removableTokenData.Add(new DaryResult(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
-            }
-            foreach (var removableCalc in simpData.RemovableCalcs) {
+            foreach (var removableCalc in simpData.RemovableCalcs)
                 removableTokenData.Add(new DaryResult(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
-            }
-            foreach (var line in simpData.SimplifiedCalcs.Item1) {
+            foreach (var line in simpData.SimplifiedCalcs.Item1) 
                 removableTokenData.Add(new DaryResult(line.tok, line.AsStringLiteral().Length, "Calc Line"));
-            }
-            foreach (var hint in simpData.SimplifiedCalcs.Item2) {
-                var index = simpData.SimplifiedCalcs.Item2.IndexOf(hint);
-                var calcOp = simpData.SimplifiedCalcs.Item3[index];
-                //TODO find position of calcOp - this will probably fail as it is
-                var result = new DaryResult(hint.Tok, hint.EndTok, "CalcStmt Hint");
-            }
-            foreach (var simplifiedAssert in simpData.SimplifiedAsserts) {
+            foreach (var hint in simpData.SimplifiedCalcs.Item2) 
+                removableTokenData.Add(new DaryResult(hint.Tok, hint.EndTok, "CalcStmt Hint"));
+            foreach (var simplifiedAssert in simpData.SimplifiedAsserts) 
                 removableTokenData.Add(new DaryResult(simplifiedAssert.Item1.Tok, simplifiedAssert.Item1.EndTok, "Assert Statement", simplifiedAssert.Item2));
-            }
-            foreach (var simplifiedInvariant in simpData.SimplifiedInvariants) {
+            foreach (var simplifiedInvariant in simpData.SimplifiedInvariants)
                 removableTokenData.Add(new DaryResult(simplifiedInvariant.Item1.E.tok, simplifiedInvariant.Item1.E.AsStringLiteral().Length, "Invariant", simplifiedInvariant.Item2));
-            }
-
+            
             return removableTokenData;
         }
 
@@ -528,14 +515,14 @@ namespace shorty
     /// </summary>
     public class DaryResult
     {
-        public int StartPos { get; private set; }
+        public Bpl.IToken StartTok { get; private set; }
         public int Length { get; private set; }
         public string TypeOfRemovable { get; private set; }
         public object Replace { get; private set; }
 
         public DaryResult(Bpl.IToken startToken, Bpl.IToken endToken, string typeOfRemovable)
         {
-            StartPos = startToken.pos;
+            StartTok = startToken;
             Length = endToken.pos - startToken.pos;
             TypeOfRemovable = typeOfRemovable;
             Replace = null;
@@ -543,7 +530,7 @@ namespace shorty
 
         public DaryResult(Bpl.IToken startToken, Bpl.IToken endToken, string typeOfRemovable, object replace)
         {
-            StartPos = startToken.pos;
+            StartTok = startToken;
             Length = endToken.pos - startToken.pos;
             TypeOfRemovable = typeOfRemovable;
             Replace = replace;
@@ -551,7 +538,7 @@ namespace shorty
 
         public DaryResult(Bpl.IToken startToken, int length, string typeOfRemovable)
         {
-            StartPos = startToken.pos;
+            StartTok = startToken;
             Length = length;
             TypeOfRemovable = typeOfRemovable;
             Replace = null;
@@ -559,7 +546,7 @@ namespace shorty
 
         public DaryResult(Bpl.IToken startToken, int length, string typeOfRemovable, object replace)
         {
-            StartPos = startToken.pos;
+            StartTok = startToken;
             Length = length;
             TypeOfRemovable = typeOfRemovable;
             Replace = replace;
