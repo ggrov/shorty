@@ -44,6 +44,8 @@ method FindZero_GhostLoop(a: array<int>) returns (r: int)
   var n := 0;
   while (n < a.Length)
     invariant forall i :: 0 <= i < n && i < a.Length ==> a[i] != 0;
+    invariant 4 >  3
+    decreases a.Length - n
   {
     if (a[n] == 0) { return n; }
     ghost var m := n;

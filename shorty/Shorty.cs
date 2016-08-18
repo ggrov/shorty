@@ -84,27 +84,35 @@ namespace shorty
 
             foreach (var removableAssert in simpData.RemovableAsserts)
                 removableTokenData.Add(new DaryResult(removableAssert.Tok, removableAssert.EndTok, "Assert Statement"));
-            foreach (var invariant in simpData.RemovableInvariants)
-                removableTokenData.Add(new DaryResult(invariant.E.tok, invariant.E.AsStringLiteral().Length, "Invariant"));
+            foreach (var invariant in simpData.RemovableInvariants) 
+                removableTokenData.Add(new DaryResult(invariant.E.tok, GetExpressionLength(invariant.E) + "invariant ".Length, "Invariant"));
             foreach (var removableDecrease in simpData.RemovableDecreases)
-                removableTokenData.Add(new DaryResult(removableDecrease.tok, removableDecrease.AsStringLiteral().Length, "Decreases Expression"));
+                removableTokenData.Add(new DaryResult(removableDecrease.tok, GetExpressionLength(removableDecrease) + "decreases ".Length, "Decreases Expression"));
             foreach (var removableLemmaCall in simpData.RemovableLemmaCalls)
                 removableTokenData.Add(new DaryResult(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
             foreach (var removableCalc in simpData.RemovableCalcs)
                 removableTokenData.Add(new DaryResult(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
-            foreach (var line in simpData.SimplifiedCalcs.Item1) 
-                removableTokenData.Add(new DaryResult(line.tok, line.AsStringLiteral().Length, "Calc Line"));
-            foreach (var hint in simpData.SimplifiedCalcs.Item2) 
+            foreach (var line in simpData.SimplifiedCalcs.Item1)
+                removableTokenData.Add(new DaryResult(line.tok, GetExpressionLength(line), "Calc Line"));
+            foreach (var hint in simpData.SimplifiedCalcs.Item2)
                 removableTokenData.Add(new DaryResult(hint.Tok, hint.EndTok, "CalcStmt Hint"));
-            foreach (var simplifiedAssert in simpData.SimplifiedAsserts) 
+            foreach (var simplifiedAssert in simpData.SimplifiedAsserts)
                 removableTokenData.Add(new DaryResult(simplifiedAssert.Item1.Tok, simplifiedAssert.Item1.EndTok, "Assert Statement", simplifiedAssert.Item2));
             foreach (var simplifiedInvariant in simpData.SimplifiedInvariants)
-                removableTokenData.Add(new DaryResult(simplifiedInvariant.Item1.E.tok, simplifiedInvariant.Item1.E.AsStringLiteral().Length, "Invariant", simplifiedInvariant.Item2));
-            
+                removableTokenData.Add(new DaryResult(simplifiedInvariant.Item1.E.tok, GetExpressionLength(simplifiedInvariant.Item1.E) + "invariant ".Length, "Invariant", simplifiedInvariant.Item2));
             return removableTokenData;
         }
 
-        #endregion
+        private static int GetExpressionLength(Expression expr)
+        {
+            StringWriter sw = new StringWriter();
+            Printer printer = new Printer(sw);
+            printer.PrintExpression(expr, false);
+            return sw.ToString().Length;
+        }
+
+
+    #endregion
 
         public SimplificationData FastRemoveAllRemovables()
         {

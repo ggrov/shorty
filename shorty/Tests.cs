@@ -305,5 +305,17 @@ namespace shorty
             Assert.AreEqual(oaatRemovedCalcs.Item4.Count, simulRemovedCalcs.Item4.Count);
             Assert.AreEqual(oaatRemovedCalcs.Item4.Count, allRemovableTypeResults.RemovableCalcs.Count);
         }
+
+        [Test]
+        public void DaryTest()
+        {
+            Initialise();
+            var stop = new StopChecker();
+            var dary = new Dary(stop);
+            var program = GetProgram("FindZero.dfy");
+
+            var results = dary.ProcessProgram(program);
+
+        }
     }
 }

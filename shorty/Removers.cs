@@ -339,7 +339,7 @@ namespace shorty
             CheckIfMemberWasAlreadyAdded(pos);
             foundMember = FindMemberInFunction(pos, memberDecls);
             if (foundMember != null) return foundMember;
-            throw new Exception("Could not find method");
+            throw new CannotFindMemberException();
         }
 
         private static MemberDecl FindMemberInFunction(int pos, IList<MemberDecl> memberDecls)
@@ -412,9 +412,6 @@ namespace shorty
                 }
                 catch (AlreadyRemovedException) {
                     return;
-                }
-                catch (Exception) {
-                    throw new Exception("Could not find member");
                 }
 
                 if (member == null) return;
@@ -982,6 +979,7 @@ namespace shorty
     }
 
     internal class UnableToDetermineTypeException : Exception { }
+    public class CannotFindMemberException : Exception { }
 
     internal class SimultaneousAllTypeRemover : VerificationErrorInformationRetriever
     {
@@ -1053,9 +1051,6 @@ namespace shorty
             }
             catch (AlreadyRemovedException) {
                 return null;
-            }
-            catch (Exception) {
-                throw new Exception("Could not find member");
             }
         }
 
@@ -1276,17 +1271,19 @@ namespace shorty
                     return false;
                 }
             }
-
             // otherwise we create a new one
-            if (index < asserts.Count) {
-                InitialiseItem(asserts[index], member);
-                return false;
+            else {
+
+                if (index < asserts.Count) {
+                    InitialiseItem(asserts[index], member);
+                    return false;
+                }
+                else if (index - asserts.Count < invariants.Count) {
+                    InitialiseItem(invariants[index - asserts.Count], member);
+                    return false;
+                }
             }
-            else if (index - asserts.Count < invariants.Count) {
-                InitialiseItem(invariants[index - asserts.Count], member);
-                return false;
-            }
-            else return SimplifyCalcs(member);
+            return SimplifyCalcs(member);
             
         }
 
