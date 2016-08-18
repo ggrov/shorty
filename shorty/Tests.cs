@@ -312,9 +312,11 @@ namespace shorty
             Initialise();
             var stop = new StopChecker();
             var dary = new Dary(stop);
-            var program = GetProgram("FindZero.dfy");
+            var program = GetProgram("CombinedAsserts.dfy");
 
-            var results = dary.ProcessProgram(program);
+            var members = new List<MemberDecl> {(program.DefaultModuleDef.TopLevelDecls[0] as ClassDecl).Members[0]};
+
+            var results = dary.ProcessMembers(program, members);
 
         }
     }
