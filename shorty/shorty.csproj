@@ -5,7 +5,7 @@
     <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
     <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
     <ProjectGuid>{A32BAA1C-7640-4022-BCD5-117C2275B5A4}</ProjectGuid>
-    <OutputType>Library</OutputType>
+    <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
     <RootNamespace>shorty</RootNamespace>
     <AssemblyName>shorty</AssemblyName>
@@ -171,6 +171,7 @@
     <Compile Include="Shorty.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="ShortyMain.cs" />
+    <Compile Include="TimeComparer.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />

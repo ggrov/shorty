@@ -137,6 +137,7 @@ namespace shorty
             foreach (var tuple in data) {
                 var name = tuple.Item1;
                 var before = tuple.Item2;
+                if(before == 0) continue;
                 var after = tuple.Item3;
                 var removed = before - after;
                 var percentage = 100f - ((float) after/(float) before)*100f;

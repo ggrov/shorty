@@ -107,8 +107,8 @@ namespace shorty
         {
             DafnyOptions.Install(new DafnyOptions());
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
-//            DafnyOptions.O.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-            DafnyOptions.O.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+            DafnyOptions.O.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+//            DafnyOptions.O.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             DafnyOptions.O.ApplyDefaultOptions();
             DafnyOptions.O.RunningBoogieFromCommandLine = true;
             DafnyOptions.O.VerifySnapshots = 1;
@@ -127,93 +127,9 @@ namespace shorty
 
         public static void CompareSearchStrategies(List<Program> programs)
         {
-            const int numberOfRuns = 1;
-            var count = 0;
-            var times = new List<Tuple<Program, long, long, long>>();
-            foreach (var program in programs) {
-                Console.WriteLine("{0}: {1}/{2}", program.Name, ++count, programs.Count);
-                var sw = new Stopwatch();
-                Shorty shorty = null;
-                var valid = true;
-                SimpleVerifier verifier = new SimpleVerifier();
-                if (!verifier.IsProgramValid(program)) continue;
-                long simpleValidatorTime = 0;
-                Console.Write(" => OneAtATime");
-                for (var i = 0; i < numberOfRuns; i++) {
-                    Console.Write(".");
-                    try {
-                        shorty = new Shorty(SimpleCloner.CloneProgram(program));
-                        sw.Start();
-                        shorty.FindRemovableAsserts();
-                        shorty.FindRemovableInvariants();
-                        shorty.FindRemovableDecreases();
-                        shorty.FindRemovableLemmaCalls();
-                        shorty.FindRemovableCalcs(new CalcRemover(program));
-//                        shorty.GetSimplifiedAsserts();
-//                        shorty.GetSimplifiedInvariants();
-                        sw.Stop();
-                        simpleValidatorTime += sw.ElapsedMilliseconds;
-                        sw.Reset();
-                    }
-                    catch {
-                        valid = false;
-                        break;
-                    }
-                }
-                if (!valid) continue;
-                long simultaneousValidatorTime = 0;
-                Console.Write(" Simultaneous");
-                for (var i = 0; i < numberOfRuns; i++) {
-                    Console.Write(".");
-                    try {
-                        var clone = SimpleCloner.CloneProgram(program);
-                        shorty = new Shorty(clone, new SimultaneousMethodRemover(clone));
-                        sw.Start();
-                        shorty.FindRemovableAsserts();
-                        shorty.FindRemovableInvariants();
-                        shorty.FindRemovableDecreases();
-                        shorty.FindRemovableLemmaCalls();
-                        shorty.FindRemovableCalcs(new CalcRemover(program));
-//                        shorty.GetSimplifiedAsserts();
-//                        shorty.GetSimplifiedInvariants();
-                        sw.Stop();
-                        simultaneousValidatorTime += sw.ElapsedMilliseconds;
-                        sw.Reset();
-                    }
-                    catch {
-                        valid = false;
-                        break;
-                    }
-                }
-                long fullSimultaneousTime = 0;
-                Console.Write(" Full Simultaneous");
-                for (var i = 0; i < numberOfRuns; i++) {
-                    Console.Write(".");
-                    try {
-                        var clone = SimpleCloner.CloneProgram(program);
-                        shorty = new Shorty(clone);
-                        sw.Start();
-                        shorty.FastRemoveAllRemovables();
-                        sw.Stop();
-                        fullSimultaneousTime += sw.ElapsedMilliseconds;
-                        sw.Reset();
-                    }
-                    catch {
-                        valid = false;
-                        break;
-                    }
-                }
-                Console.WriteLine();
-                if (!valid) continue;
-
-                times.Add(new Tuple<Program, long, long, long>(program, simpleValidatorTime/numberOfRuns, simultaneousValidatorTime/numberOfRuns, fullSimultaneousTime/numberOfRuns));
-            }
-
             using (TextWriter tw = File.CreateText("H:\\dafny\\experimentResults\\SearchStrategyComparisons.csv")) {
-                tw.WriteLine("Program, OneAtATime, Simultaneous, Full Simultaneous");
-                foreach (var tuple in times) {
-                    tw.WriteLine("{0},{1},{2},{3}", tuple.Item1.Name, tuple.Item2, tuple.Item3, tuple.Item4);
-                }
+                TimeComparers timeComparers = new TimeComparers(programs, 1);
+                timeComparers.CompareTimes(tw);
             }
         }
 
