@@ -92,10 +92,18 @@ namespace shorty
                 removableTokenData.Add(new DaryResult(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
             foreach (var removableCalc in simpData.RemovableCalcs)
                 removableTokenData.Add(new DaryResult(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
-            foreach (var line in simpData.SimplifiedCalcs.Item1)
-                removableTokenData.Add(new DaryResult(line.tok, GetExpressionLength(line), "Calc Line"));
-            foreach (var hint in simpData.SimplifiedCalcs.Item2)
-                removableTokenData.Add(new DaryResult(hint.Tok, hint.EndTok, "CalcStmt Hint"));
+
+            // This way will return the calc statement so it can be replaced
+            foreach (var calcStmt in simpData.SimplifiedCalcs.Item4)
+                removableTokenData.Add(new DaryResult(calcStmt.Tok, calcStmt.EndTok, "Calc Statement", calcStmt));
+
+            //this way will return the lines and hints -- commented out as there are issues getting the CalcOp
+
+//            foreach (var line in simpData.SimplifiedCalcs.Item1)
+//                removableTokenData.Add(new DaryResult(line.tok, GetExpressionLength(line), "Calc Line"));
+//            foreach (var hint in simpData.SimplifiedCalcs.Item2)
+//                removableTokenData.Add(new DaryResult(hint.Tok, hint.EndTok, "CalcStmt Hint"));
+
             foreach (var simplifiedAssert in simpData.SimplifiedAsserts)
                 removableTokenData.Add(new DaryResult(simplifiedAssert.Item1.Tok, simplifiedAssert.Item1.EndTok, "Assert Statement", simplifiedAssert.Item2));
             foreach (var simplifiedInvariant in simpData.SimplifiedInvariants)
@@ -105,8 +113,8 @@ namespace shorty
 
         private static int GetExpressionLength(Expression expr)
         {
-            StringWriter sw = new StringWriter();
-            Printer printer = new Printer(sw);
+            var sw = new StringWriter();
+            var printer = new Printer(sw);
             printer.PrintExpression(expr, false);
             return sw.ToString().Length;
         }
@@ -129,7 +137,7 @@ namespace shorty
         public SimplificationData FastRemoveAllInMethods(StopChecker stopChecker, List<MemberDecl> members)
         {
             var remover = new SimultaneousAllTypeRemover(Program);
-            AllRemovableTypes newAllRemovables = new AllRemovableTypes();
+            var newAllRemovables = new AllRemovableTypes();
             foreach (var member in members) {
                 if(!_allRemovableTypes.RemovableTypesInMethods.ContainsKey(member))
                     throw new Exception("Could not find the method");

@@ -475,7 +475,7 @@ namespace shorty
         public List<Wrap<Statement>> RemovableCalcs = new List<Wrap<Statement>>();
         public List<Tuple<Statement, Statement>> SimplifiedAsserts = new List<Tuple<Statement, Statement>>();
         public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> SimplifiedInvariants = new List<Tuple<MaybeFreeExpression, MaybeFreeExpression>>();
-        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(new List<Expression>(), new List<BlockStmt>(), new List<CalcStmt.CalcOp>());
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>> SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>>(new List<Expression>(), new List<BlockStmt>(), new List<CalcStmt.CalcOp>(), new List<CalcStmt>());
         public List<WildCardDecreases> RemovableWildCardDecreaseses = new List<WildCardDecreases>();
 
         public SimplificationData ToSimplificationData()
@@ -511,7 +511,7 @@ namespace shorty
         public List<CalcStmt> RemovableCalcs = new List<CalcStmt>();
         public List<Tuple<Statement, Statement>> SimplifiedAsserts = new List<Tuple<Statement, Statement>>();
         public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> SimplifiedInvariants = new List<Tuple<MaybeFreeExpression, MaybeFreeExpression>>();
-        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>> SimplifiedCalcs;
+        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>> SimplifiedCalcs;
     }
 
     internal class WildCardDecreasesRemover
@@ -603,6 +603,7 @@ namespace shorty
             var calcLines = new List<Expression>();
             var calcBlocks = new List<BlockStmt>();
             var calcOps = new List<CalcStmt.CalcOp>();
+            var allSimplifiedCalcs = new List<CalcStmt>();
 
             foreach (var wrap in removableTypesInMember.Calcs) {
                 var simplifiedItem = SimplifyCalc((CalcStmt) wrap.Removable);
@@ -610,8 +611,9 @@ namespace shorty
                 calcLines.AddRange(simplifiedItem.Item1);
                 calcBlocks.AddRange(simplifiedItem.Item2);
                 calcOps.AddRange(simplifiedItem.Item3);
+                allSimplifiedCalcs.Add((CalcStmt) wrap.Removable);
             }
-            simpData.SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>>(calcLines, calcBlocks, calcOps);
+            simpData.SimplifiedCalcs = new Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>>(calcLines, calcBlocks, calcOps, allSimplifiedCalcs);
             return simpData;
             //TODO remove things from the _allRemovableTypes. Would that even be worth it in this use case?
         }
@@ -827,9 +829,15 @@ namespace shorty
 
     internal class RemovableCalcParts //TODO: use this more
     {
+        public CalcStmt OriginalCalcStmt;
         public List<Expression> Lines = new List<Expression>();
         public List<BlockStmt> Hints = new List<BlockStmt>();
         public List<CalcStmt.CalcOp> CalcOps = new List<CalcStmt.CalcOp>();
+
+        public RemovableCalcParts(CalcStmt originalCalcStmt)
+        {
+            OriginalCalcStmt = originalCalcStmt;
+        }
     }
 
     internal class CalcData
@@ -853,7 +861,7 @@ namespace shorty
 
         public CalcData(CalcStmt calcStmt)
         {
-            RemovableCalcParts = new RemovableCalcParts();
+            RemovableCalcParts = new RemovableCalcParts(calcStmt);
             _calcStmt = calcStmt;
             Finished = false;
         }
@@ -1146,6 +1154,7 @@ namespace shorty
                     simpData.SimplifiedCalcs.Item1.AddRange(calc.RemovableCalcParts.Lines);
                     simpData.SimplifiedCalcs.Item2.AddRange(calc.RemovableCalcParts.Hints);
                     simpData.SimplifiedCalcs.Item3.AddRange(calc.RemovableCalcParts.CalcOps);
+                    simpData.SimplifiedCalcs.Item4.Add(calc.RemovableCalcParts.OriginalCalcStmt);
                 }
             }
         }
