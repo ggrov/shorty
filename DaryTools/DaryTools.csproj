@@ -1,0 +1,97 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" DefaultTargets="Build" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
+  <PropertyGroup>
+    <Configuration Condition=" '$(Configuration)' == '' ">Debug</Configuration>
+    <Platform Condition=" '$(Platform)' == '' ">AnyCPU</Platform>
+    <ProjectGuid>{6A79A7B0-613F-4576-9325-E4234C2ACF17}</ProjectGuid>
+    <OutputType>Exe</OutputType>
+    <AppDesignerFolder>Properties</AppDesignerFolder>
+    <RootNamespace>DaryTools</RootNamespace>
+    <AssemblyName>DaryTools</AssemblyName>
+    <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
+    <FileAlignment>512</FileAlignment>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+    <Optimize>false</Optimize>
+    <OutputPath>bin\Debug\</OutputPath>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <DebugType>pdbonly</DebugType>
+    <Optimize>true</Optimize>
+    <OutputPath>bin\Release\</OutputPath>
+    <DefineConstants>TRACE</DefineConstants>
+    <ErrorReport>prompt</ErrorReport>
+    <WarningLevel>4</WarningLevel>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Boogie">
+      <HintPath>..\..\tacny\boogie\Binaries\Boogie.exe</HintPath>
+    </Reference>
+    <Reference Include="BoogieAbsInt">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieAbsInt.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieBasetypes">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieBasetypes.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieConcurrency">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieConcurrency.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieCore">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieCore.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieExecutionEngine">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieExecutionEngine.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieParserHelper">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieParserHelper.dll</HintPath>
+    </Reference>
+    <Reference Include="BoogieVCGeneration">
+      <HintPath>..\..\tacny\boogie\Binaries\BoogieVCGeneration.dll</HintPath>
+    </Reference>
+    <Reference Include="Dafny">
+      <HintPath>..\..\tacny\dafny\Binaries\Dafny.exe</HintPath>
+    </Reference>
+    <Reference Include="DafnyPipeline">
+      <HintPath>..\..\tacny\dafny\Binaries\DafnyPipeline.dll</HintPath>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Xml.Linq" />
+    <Reference Include="System.Data.DataSetExtensions" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Data" />
+    <Reference Include="System.Xml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="DaryMain.cs" />
+    <Compile Include="Logger.cs" />
+    <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="RemovalOrderTester.cs" />
+    <Compile Include="TimeComparer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\Dary\Dary.csproj">
+      <Project>{a32baa1c-7640-4022-bcd5-117c2275b5a4}</Project>
+      <Name>Dary</Name>
+    </ProjectReference>
+  </ItemGroup>
+  <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
+  <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
+       Other similar extension points exist, see Microsoft.Common.targets.
+  <Target Name="BeforeBuild">
+  </Target>
+  <Target Name="AfterBuild">
+  </Target>
+  -->
+</Project>

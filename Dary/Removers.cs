@@ -10,7 +10,7 @@ using Program = Microsoft.Dafny.Program;
 
 namespace Dary
 {
-    internal class SimpleVerifier
+    public class SimpleVerifier
     {
         public void BoogieErrorInformation(ErrorInformation errorInfo) {}
 
@@ -55,7 +55,7 @@ namespace Dary
         }
     }
 
-    internal class RemovableTypesInMember
+    public class RemovableTypesInMember
     {
         public MemberDecl Member { get; private set; }
         public readonly List<Wrap<Statement>> Asserts = new List<Wrap<Statement>>();
@@ -71,7 +71,7 @@ namespace Dary
         }
     }
 
-    internal class Wrap<T>
+    public class Wrap<T>
     {
         public T Removable { get; protected set; }
         public List<T> ParentList { get; private set; }
@@ -120,7 +120,7 @@ namespace Dary
         }
     }
 
-    internal class WildCardDecreases
+    public class WildCardDecreases
     {
         public readonly Expression Expression;
         public Wrap<Expression> ExpressionWrap;
@@ -273,12 +273,12 @@ namespace Dary
         }
     }
 
-    internal interface IRemover
+    public interface IRemover
     {
         List<Wrap<T>> Remove<T>(Dictionary<MemberDecl, List<Wrap<T>>> memberWrapDictionary);
     }
 
-    internal class OneAtATimeRemover : IRemover
+    public class OneAtATimeRemover : IRemover
     {
         private readonly Program _program;
 
@@ -394,7 +394,7 @@ namespace Dary
         }
     }
 
-    internal class SimultaneousMethodRemover : IRemover
+    public class SimultaneousMethodRemover : IRemover
     {
         // Goes though each method, removes one thing then verifies and reinserts from the error messages
         private readonly Program _program;
@@ -502,7 +502,7 @@ namespace Dary
         }
     }
 
-    internal class SimplificationData
+    public class SimplificationData
     {
         public List<AssertStmt> RemovableAsserts = new List<AssertStmt>();
         public List<MaybeFreeExpression> RemovableInvariants = new List<MaybeFreeExpression>();

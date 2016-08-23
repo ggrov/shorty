@@ -12,6 +12,11 @@ namespace Dary
     [TestFixture]
     internal class DaryTest
     {
+        private static void ContractFailureHandler(Object obj, ContractFailedEventArgs args)
+        {
+            throw new ContractFailedException();
+        }
+
         private void Initialise()
         {
             DafnyOptions.Install(new DafnyOptions());
@@ -23,7 +28,7 @@ namespace Dary
             Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
             Bpl.OutputPrinter printer = new InvisibleConsolePrinter();
             Bpl.ExecutionEngine.printer = printer;
-            Contract.ContractFailed += DaryMain.ContractFailureHandler;
+            Contract.ContractFailed += ContractFailureHandler;
         }
 
         private Program GetProgram(string fileName)

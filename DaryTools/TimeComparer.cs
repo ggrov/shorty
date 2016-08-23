@@ -5,10 +5,12 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using DaryTools;
 using Microsoft.Dafny;
-using NUnit.Framework.Interfaces;
+using Dary;
 
-namespace Dary
+
+namespace DaryTools
 {
     class TimeComparers
     {

@@ -1,8 +1,9 @@
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Dafny;
+using Dary;
 
-namespace Dary
+namespace DaryTools
 {
     internal class RemovalOrderTester<T>
     {

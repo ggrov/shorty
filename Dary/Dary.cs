@@ -12,34 +12,54 @@ namespace Dary
 {
     public class NotValidException : Exception {}
 
-    internal class DaryController
+    public class InvisibleErrorReporter : ConsoleErrorReporter
+    {
+        public override bool Message(MessageSource source, ErrorLevel level, Bpl.IToken tok, string msg)
+        {
+            return false;
+        }
+    }
+
+    public class InvisibleConsolePrinter : Bpl.ConsolePrinter
+    {
+        public override void ReportBplError(Bpl.IToken tok, string message, bool error, TextWriter tw, string category = null) { }
+        public new void WriteErrorInformation(Bpl.ErrorInformation errorInfo, TextWriter tw, bool skipExecutionTrace = true) { }
+    }
+
+    public class ContractFailedException : Exception
+    {
+        public ContractFailedException() { }
+        public ContractFailedException(string message) : base(message) { }
+    }
+
+    public class DaryController
     {
         public Program Program { get; private set; }
 
-        private readonly AllRemovableTypes _allRemovableTypes;
+        public readonly AllRemovableTypes AllRemovableTypes;
 
         public ReadOnlyCollection<Wrap<Statement>> Asserts {
-            get { return _allRemovableTypes.Asserts; }
+            get { return AllRemovableTypes.Asserts; }
         }
 
         public ReadOnlyCollection<Wrap<MaybeFreeExpression>> Invariants {
-            get { return _allRemovableTypes.Invariants; }
+            get { return AllRemovableTypes.Invariants; }
         }
 
         public ReadOnlyCollection<Wrap<Expression>> Decreases {
-            get { return _allRemovableTypes.Decreases; }
+            get { return AllRemovableTypes.Decreases; }
         }
 
         public ReadOnlyCollection<WildCardDecreases> DecreasesWildCards {
-            get { return _allRemovableTypes.WildCardDecreaseses; }
+            get { return AllRemovableTypes.WildCardDecreaseses; }
         }
 
         public ReadOnlyCollection<Wrap<Statement>> LemmaCalls {
-            get { return _allRemovableTypes.LemmaCalls; }
+            get { return AllRemovableTypes.LemmaCalls; }
         }
 
         public ReadOnlyCollection<Wrap<Statement>> Calcs {
-            get { return _allRemovableTypes.Calcs; }
+            get { return AllRemovableTypes.Calcs; }
         }
 
         public IRemover Remover { get; set; }
@@ -53,7 +73,7 @@ namespace Dary
             if (!IsProgramValid())
                 throw new NotValidException();
             var removalTypeFinder = new RemovableTypeFinder(program);
-            _allRemovableTypes = removalTypeFinder.FindRemovables();
+            AllRemovableTypes = removalTypeFinder.FindRemovables();
             Remover = remover;
         }
 
@@ -64,7 +84,7 @@ namespace Dary
             if (!IsProgramValid())
                 throw new NotValidException();
             var removalTypeFinder = new RemovableTypeFinder(program);
-            _allRemovableTypes = removalTypeFinder.FindRemovables();
+            AllRemovableTypes = removalTypeFinder.FindRemovables();
             Remover = new OneAtATimeRemover(program);
         }
 
@@ -94,6 +114,7 @@ namespace Dary
                     nameLength = (((removableLemmaCall.Rhss[0] as ExprRhs).Expr as ApplySuffix).Lhs as NameSegment).Name.Length;
                 }
                 catch (Exception) {
+                    Console.WriteLine("Failed to find start token of lemmaCall");
                     continue;
                 }
                 var startToken = new Bpl.Token(removableLemmaCall.Tok.line, removableLemmaCall.Tok.col - nameLength);
@@ -134,13 +155,13 @@ namespace Dary
         public SimplificationData FastRemoveAllRemovables()
         {
             var remover = new SimultaneousAllTypeRemover(Program);
-            var simpData = remover.Remove(_allRemovableTypes);
+            var simpData = remover.Remove(AllRemovableTypes);
             return simpData;
         }
         public SimplificationData FastRemoveAllRemovables(StopChecker stopChecker)
         {
             var remover = new SimultaneousAllTypeRemover(Program);
-            var simpData = remover.Remove(_allRemovableTypes, stopChecker);
+            var simpData = remover.Remove(AllRemovableTypes, stopChecker);
             return simpData;
         }
         public SimplificationData FastRemoveAllInMethods(StopChecker stopChecker, List<MemberDecl> members)
@@ -148,9 +169,9 @@ namespace Dary
             var remover = new SimultaneousAllTypeRemover(Program);
             var newAllRemovables = new AllRemovableTypes();
             foreach (var member in members) {
-                if(!_allRemovableTypes.RemovableTypesInMethods.ContainsKey(member))
+                if(!AllRemovableTypes.RemovableTypesInMethods.ContainsKey(member))
                     throw new Exception("Could not find the method");
-                newAllRemovables.RemovableTypesInMethods.Add(member, _allRemovableTypes.RemovableTypesInMethods[member]);
+                newAllRemovables.RemovableTypesInMethods.Add(member, AllRemovableTypes.RemovableTypesInMethods[member]);
             }
             var simpData = remover.Remove(newAllRemovables, stopChecker);
             return simpData;
@@ -160,9 +181,9 @@ namespace Dary
 
         public List<Statement> FindRemovableLemmaCalls()
         {
-            var removableLemmaCalls = Remover.Remove(_allRemovableTypes.GetLemmaCallDictionary());
+            var removableLemmaCalls = Remover.Remove(AllRemovableTypes.GetLemmaCallDictionary());
             foreach (var removableLemmaCall in removableLemmaCalls) {
-                _allRemovableTypes.RemoveLemmaCall(removableLemmaCall);
+                AllRemovableTypes.RemoveLemmaCall(removableLemmaCall);
             }
             return Wrap<Statement>.GetRemovables(removableLemmaCalls);
         }
@@ -173,17 +194,17 @@ namespace Dary
 
         public List<Expression> FindRemovableDecreases()
         {
-            var removableDecreases = Remover.Remove(_allRemovableTypes.GetDecreasesDictionary());
+            var removableDecreases = Remover.Remove(AllRemovableTypes.GetDecreasesDictionary());
             foreach (var removableDecrease in removableDecreases) {
-                _allRemovableTypes.RemoveDecreases(removableDecrease);
+                AllRemovableTypes.RemoveDecreases(removableDecrease);
             }
             //We also have to find removable wildcards which are stored differently
             WildCardDecreasesRemover wcdRemover = new WildCardDecreasesRemover(Program);
-            var wildCardDecreases = wcdRemover.FindRemovableWildCards(_allRemovableTypes.WildCardDecreaseses.ToList());
+            var wildCardDecreases = wcdRemover.FindRemovableWildCards(AllRemovableTypes.WildCardDecreaseses.ToList());
             var expressions = Wrap<Expression>.GetRemovables(removableDecreases);
 
             foreach (var wildCardDecrease in wildCardDecreases) {
-                _allRemovableTypes.RemoveWildCardDecreases(wildCardDecrease);
+                AllRemovableTypes.RemoveWildCardDecreases(wildCardDecrease);
                 expressions.Add(wildCardDecrease.Expression);
             }
             return expressions;
@@ -197,9 +218,9 @@ namespace Dary
 
         public List<MaybeFreeExpression> FindRemovableInvariants()
         {
-            var removableInvariants = Remover.Remove(_allRemovableTypes.GetInvariantDictionary());
+            var removableInvariants = Remover.Remove(AllRemovableTypes.GetInvariantDictionary());
             foreach (var removableInvariant in removableInvariants) {
-                _allRemovableTypes.RemoveInvariant(removableInvariant);
+                AllRemovableTypes.RemoveInvariant(removableInvariant);
             }
             return Wrap<MaybeFreeExpression>.GetRemovables(removableInvariants);
         }
@@ -207,21 +228,14 @@ namespace Dary
         public List<Tuple<MaybeFreeExpression, MaybeFreeExpression>> GetSimplifiedInvariants()
         {
             var simplifier = new Simplifier(Program);
-            var wrappedInvariants = simplifier.GetSimplifiedItems(_allRemovableTypes.Invariants);
+            var wrappedInvariants = simplifier.GetSimplifiedItems(AllRemovableTypes.Invariants);
             var invariants = new List<Tuple<MaybeFreeExpression, MaybeFreeExpression>>();
             foreach (var wrappedInvariant in wrappedInvariants) {
-                _allRemovableTypes.AddInvariant(wrappedInvariant.Item2, _allRemovableTypes.FindMemberFromInvariantWrap(wrappedInvariant.Item1));
-                _allRemovableTypes.RemoveInvariant(wrappedInvariant.Item1);
+                AllRemovableTypes.AddInvariant(wrappedInvariant.Item2, AllRemovableTypes.FindMemberFromInvariantWrap(wrappedInvariant.Item1));
+                AllRemovableTypes.RemoveInvariant(wrappedInvariant.Item1);
                 invariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>(wrappedInvariant.Item1.Removable, wrappedInvariant.Item2.Removable));
             }
             return invariants;
-        }
-
-
-        public Dictionary<Method, List<List<MaybeFreeExpression>>> TestDifferentInvariantRemovals()
-        {
-            var removalOrderTester = new RemovalOrderTester<MaybeFreeExpression>(_allRemovableTypes.GetInvariantDictionary(), Program);
-            return removalOrderTester.TestDifferentRemovals();
         }
 
         #endregion
@@ -235,27 +249,21 @@ namespace Dary
         public List<Tuple<Statement, Statement>> GetSimplifiedAsserts()
         {
             var simplifier = new Simplifier(Program);
-            var wrappedAsserts = simplifier.GetSimplifiedItems(_allRemovableTypes.Asserts);
+            var wrappedAsserts = simplifier.GetSimplifiedItems(AllRemovableTypes.Asserts);
             var asserts = new List<Tuple<Statement, Statement>>();
             foreach (var assert in wrappedAsserts) {
-                _allRemovableTypes.AddAssert(assert.Item2, _allRemovableTypes.FindMemberFromAssertWrap(assert.Item1));
-                _allRemovableTypes.RemoveAssert(assert.Item1);
+                AllRemovableTypes.AddAssert(assert.Item2, AllRemovableTypes.FindMemberFromAssertWrap(assert.Item1));
+                AllRemovableTypes.RemoveAssert(assert.Item1);
                 asserts.Add(new Tuple<Statement, Statement>(assert.Item1.Removable, assert.Item2.Removable));
             }
             return asserts;
         }
 
-        public Dictionary<Method, List<List<Statement>>> TestDifferentAssertRemovals()
-        {
-            var removalOrderTester = new RemovalOrderTester<Statement>(_allRemovableTypes.GetAssertDictionary(), Program);
-            return removalOrderTester.TestDifferentRemovals();
-        }
-
         public List<Statement> FindRemovableAsserts()
         {
-            var removedAsserts = Remover.Remove(_allRemovableTypes.GetAssertDictionary());
+            var removedAsserts = Remover.Remove(AllRemovableTypes.GetAssertDictionary());
             foreach (var removedAssert in removedAsserts) {
-                _allRemovableTypes.RemoveAssert(removedAssert);
+                AllRemovableTypes.RemoveAssert(removedAssert);
             }
             if(!IsProgramValid())
                 throw new Exception("Program invalid after assertion removal");
@@ -271,9 +279,9 @@ namespace Dary
             return FindRemovableCalcs(new CalcRemover(Program));
         }
 
-        public Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>> FindRemovableCalcs(CalcRemover calcRemover)
+        internal Tuple<List<Expression>, List<BlockStmt>, List<CalcStmt.CalcOp>, List<CalcStmt>> FindRemovableCalcs(CalcRemover calcRemover)
         {
-            return calcRemover.Remove(_allRemovableTypes.GetCalcDictionary());
+            return calcRemover.Remove(AllRemovableTypes.GetCalcDictionary());
         }
 
         #endregion
@@ -289,7 +297,7 @@ namespace Dary
         #endregion
     }
 
-    internal class AllRemovableTypes
+    public class AllRemovableTypes
     {
         public readonly Dictionary<MemberDecl, RemovableTypesInMember> RemovableTypesInMethods = new Dictionary<MemberDecl, RemovableTypesInMember>();
 

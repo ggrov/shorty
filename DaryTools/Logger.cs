@@ -1,14 +1,15 @@
 using System;
 using System.Collections.Generic;
-using System.Collections.ObjectModel;
 using System.Diagnostics;
-using System.IO;
 using System.Diagnostics.Contracts;
+using System.IO;
 using System.Linq;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
+using Program = Microsoft.Dafny.Program;
+using Dary;
 
-namespace Dary
+namespace DaryTools
 {
     internal class Logger
     {
