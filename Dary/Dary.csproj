@@ -163,10 +163,6 @@
   <ItemGroup>
     <Compile Include="RemovableTypeFinder.cs" />
     <Compile Include="Removers.cs" />
-    <Compile Include="Tests.cs">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-    </Compile>
-    <Compile Include="Logger.cs" />
     <Compile Include="Dary.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>

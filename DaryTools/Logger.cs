@@ -11,6 +11,7 @@ using Dary;
 
 namespace DaryTools
 {
+    //TODO: update to use SimultaneousAllTypeRemover
     internal class Logger
     {
         public readonly List<Program> Programs;
