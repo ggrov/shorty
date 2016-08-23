@@ -107,8 +107,8 @@ namespace shorty
         {
             DafnyOptions.Install(new DafnyOptions());
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
-            DafnyOptions.O.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-//            DafnyOptions.O.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            DafnyOptions.O.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            DafnyOptions.O.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             DafnyOptions.O.ApplyDefaultOptions();
             DafnyOptions.O.RunningBoogieFromCommandLine = true;
             DafnyOptions.O.VerifySnapshots = 1;
@@ -120,8 +120,8 @@ namespace shorty
 
         public static void RunLogger(List<Program> programs)
         {
-            var logger = new Logger("H:\\dafny\\experimentResults", programs, 3, true);
-//                Logger logger = new Logger("C:\\users\\Duncan\\Documents\\dafny\\experimentResults", programs, 1, false);
+//            var logger = new Logger("H:\\dafny\\experimentResults", programs, 3, true);
+                Logger logger = new Logger("C:\\users\\Duncan\\Documents\\dafny\\experimentResults", programs, 1, false);
             logger.LogAllData();
         }
 

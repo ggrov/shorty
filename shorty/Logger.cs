@@ -121,6 +121,14 @@ namespace shorty
                     }
                 }
 
+                var numberOfPrograms = 0;
+
+                foreach (var tuple in data) {
+                    var before = tuple.Item2;
+                    if (before == 0) continue;
+                    numberOfPrograms++;
+                }
+                tw.WriteLine("{0}/{1} programs found contain {2}", numberOfPrograms, data.Count, itemsName);
                 LogTupleListData(data, tw);
             }
         }
@@ -133,6 +141,10 @@ namespace shorty
             float totalTime = 0;
             float totalVerTimeBefore = 0;
             float totalVerTimeAfter = 0;
+
+            
+
+            tw.WriteLine("{0} programs containing");
 
             foreach (var tuple in data) {
                 var name = tuple.Item1;
@@ -161,7 +173,7 @@ namespace shorty
             var overAllPercentage = 100f - ((float) totalAfter/(float) totalBefore)*100;
             if (_runTimeTests) {
                 var totalVerTimeImprovement = totalVerTimeBefore - totalVerTimeAfter;
-                tw.WriteLine("Total, {0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%", totalTime, totalVerTimeBefore, totalVerTimeAfter, totalVerTimeImprovement);
+                tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%", totalTime, totalVerTimeBefore, totalVerTimeAfter, totalVerTimeImprovement);
                 tw.WriteLine(",,,,,,,Avg ver Time Improvement:,{0}", totalVerTimeImprovement/Programs.Count);
             }
             else
