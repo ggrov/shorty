@@ -83,6 +83,7 @@ namespace Dary
 
         private void FindRemovableTypesInMember(MemberDecl member, ClassDecl classDecl)
         {
+            if (member is Tactic) return;
             WildCardDecreases wildCardParent = null; // The parent of the current wildCard we are tracking
             FindDecreasesTypesInMember(member, ref wildCardParent);
             var method = member as Method;
