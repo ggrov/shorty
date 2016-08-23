@@ -32,6 +32,16 @@ namespace Dary
         public ContractFailedException(string message) : base(message) { }
     }
 
+    public class SimpleCloner
+    {
+        public static Program CloneProgram(Program program)
+        {
+            var cloner = new Cloner();
+            var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
+            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReporter());
+        }
+    }
+
     public class DaryController
     {
         public Program Program { get; private set; }
