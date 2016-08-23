@@ -8,11 +8,11 @@ using System.Net;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 
-namespace shorty
+namespace Dary
 {
     public class NotValidException : Exception {}
 
-    internal class Shorty
+    internal class DaryController
     {
         public Program Program { get; private set; }
 
@@ -46,7 +46,7 @@ namespace shorty
 
         #region Initialisation
 
-        public Shorty(Program program, IRemover remover)
+        public DaryController(Program program, IRemover remover)
         {
             Contract.Requires(program != null);
             Program = program;
@@ -57,7 +57,7 @@ namespace shorty
             Remover = remover;
         }
 
-        public Shorty(Program program)
+        public DaryController(Program program)
         {
             Contract.Requires(program != null);
             Program = program;
@@ -601,8 +601,8 @@ namespace shorty
         {
             Status = StatusEnum.Running;
             ApplyOptions();
-            var shorty = new Shorty(program);
-            var results = Shorty.GetTokens(shorty.FastRemoveAllRemovables(_stopChecker));
+            var daryController = new DaryController(program);
+            var results = DaryController.GetTokens(daryController.FastRemoveAllRemovables(_stopChecker));
             RestoreOptions();
             Status = StatusEnum.Idle;
             return results;
@@ -624,12 +624,12 @@ namespace shorty
                 var member = members[0];
                 var methodRemover = new MethodRemover(program);
                 var removables = methodRemover.FullSimplify(member);
-                results = Shorty.GetTokens(removables);
+                results = DaryController.GetTokens(removables);
             }
             else {
-                var shorty = new Shorty(program);
-                var removables = shorty.FastRemoveAllInMethods(_stopChecker, members);
-                results = Shorty.GetTokens(removables);
+                var daryController = new DaryController(program);
+                var removables = daryController.FastRemoveAllInMethods(_stopChecker, members);
+                results = DaryController.GetTokens(removables);
             }
             RestoreOptions();
             Status = StatusEnum.Idle;

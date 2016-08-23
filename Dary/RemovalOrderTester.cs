@@ -2,7 +2,7 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.Dafny;
 
-namespace shorty
+namespace Dary
 {
     internal class RemovalOrderTester<T>
     {

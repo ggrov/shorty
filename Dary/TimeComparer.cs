@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 using Microsoft.Dafny;
 using NUnit.Framework.Interfaces;
 
-namespace shorty
+namespace Dary
 {
     class TimeComparers
     {
@@ -68,13 +68,13 @@ namespace shorty
         private TimeResults Compare()
         {
             var ooatProgram = SimpleCloner.CloneProgram(_program);
-            var oaat = new Shorty(ooatProgram, new OneAtATimeRemover(ooatProgram));
+            var oaat = new DaryController(ooatProgram, new OneAtATimeRemover(ooatProgram));
 
             var simulProgram = SimpleCloner.CloneProgram(_program);
-            var simul = new Shorty(simulProgram, new SimultaneousMethodRemover(simulProgram));
+            var simul = new DaryController(simulProgram, new SimultaneousMethodRemover(simulProgram));
 
             var allTypeProgram = SimpleCloner.CloneProgram(_program);
-            var allType = new Shorty(allTypeProgram);
+            var allType = new DaryController(allTypeProgram);
 
             TimeResults timeResults = new TimeResults();
 
@@ -90,18 +90,18 @@ namespace shorty
             return timeResults;
         }
 
-        private long GetRemovalTime(Shorty shorty)
+        private long GetRemovalTime(DaryController daryController)
         {
             var stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            shorty.FindRemovableAsserts();
-            shorty.FindRemovableInvariants();
-            shorty.FindRemovableDecreases();
-            shorty.FindRemovableLemmaCalls();
-            shorty.GetSimplifiedAsserts();
-            shorty.GetSimplifiedInvariants();
-            shorty.FindRemovableCalcs();
+            daryController.FindRemovableAsserts();
+            daryController.FindRemovableInvariants();
+            daryController.FindRemovableDecreases();
+            daryController.FindRemovableLemmaCalls();
+            daryController.GetSimplifiedAsserts();
+            daryController.GetSimplifiedInvariants();
+            daryController.FindRemovableCalcs();
 
             stopwatch.Stop();
             return stopwatch.ElapsedMilliseconds;

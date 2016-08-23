@@ -7,10 +7,10 @@ using NUnit.Framework;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 
-namespace shorty
+namespace Dary
 {
     [TestFixture]
-    internal class ShortyTest
+    internal class DaryTest
     {
         private void Initialise()
         {
@@ -23,7 +23,7 @@ namespace shorty
             Bpl.CommandLineOptions.Clo.ErrorTrace = 0;
             Bpl.OutputPrinter printer = new InvisibleConsolePrinter();
             Bpl.ExecutionEngine.printer = printer;
-            Contract.ContractFailed += ShortyMain.ContractFailureHandler;
+            Contract.ContractFailed += DaryMain.ContractFailureHandler;
         }
 
         private Program GetProgram(string fileName)
@@ -44,9 +44,9 @@ namespace shorty
             return new Program(programName, module, builtIns, new InvisibleErrorReporter());
         }
 
-        private Shorty GetShorty(Program program)
+        private DaryController GetDaryController(Program program)
         {
-            return new Shorty(program, new OneAtATimeRemover(program));
+            return new DaryController(program, new OneAtATimeRemover(program));
 //            return new Shorty(program, new SimultaneousMethodRemover(program));
         }
 
@@ -55,12 +55,12 @@ namespace shorty
         {
             Initialise();
             var program = GetProgram("FindZero.dfy");
-            var shorty = GetShorty(program);
+            var daryController = GetDaryController(program);
 
-            Assert.AreEqual(3, shorty.Asserts.Count);
-            Assert.AreEqual(2, shorty.FindRemovableAsserts().Count);
-            Assert.AreEqual(1, shorty.Asserts.Count);
-            Assert.True(shorty.IsProgramValid());
+            Assert.AreEqual(3, daryController.Asserts.Count);
+            Assert.AreEqual(2, daryController.FindRemovableAsserts().Count);
+            Assert.AreEqual(1, daryController.Asserts.Count);
+            Assert.True(daryController.IsProgramValid());
         }
 
         [Test]
@@ -68,12 +68,12 @@ namespace shorty
         {
             Initialise();
             var program = GetProgram("ListCopy.dfy");
-            var shorty = GetShorty(program);
+            var daryController = GetDaryController(program);
 
-            Assert.AreEqual(4, shorty.Invariants.Count);
-            Assert.AreEqual(1, shorty.FindRemovableInvariants().Count);
-            Assert.AreEqual(3, shorty.Invariants.Count);
-            Assert.True(shorty.IsProgramValid());
+            Assert.AreEqual(4, daryController.Invariants.Count);
+            Assert.AreEqual(1, daryController.FindRemovableInvariants().Count);
+            Assert.AreEqual(3, daryController.Invariants.Count);
+            Assert.True(daryController.IsProgramValid());
         }
 
         [Test]
@@ -81,18 +81,18 @@ namespace shorty
         {
             Initialise();
             var program = GetProgram("Combinators.dfy");
-            var shorty = GetShorty(program);
+            var daryController = GetDaryController(program);
 
-            int count = shorty.Decreases.Count;
-            foreach (var wildCardDecreasese in shorty.DecreasesWildCards) {
+            int count = daryController.Decreases.Count;
+            foreach (var wildCardDecreasese in daryController.DecreasesWildCards) {
                 count += wildCardDecreasese.Count;
             }
             Assert.AreEqual(5, count);
-            Assert.AreEqual(1, shorty.FindRemovableDecreases().Count);
-            Assert.True(shorty.IsProgramValid());
+            Assert.AreEqual(1, daryController.FindRemovableDecreases().Count);
+            Assert.True(daryController.IsProgramValid());
 
-            int newCount = shorty.Decreases.Count;
-            foreach (var wildCardDecreasese in shorty.DecreasesWildCards) {
+            int newCount = daryController.Decreases.Count;
+            foreach (var wildCardDecreasese in daryController.DecreasesWildCards) {
                 newCount += wildCardDecreasese.Count;
             }
             Assert.AreEqual(4, newCount);
@@ -103,12 +103,12 @@ namespace shorty
         {
             Initialise();
             var program = GetProgram("Streams.dfy");
-            var shorty = GetShorty(program);
+            var daryController = GetDaryController(program);
 
-            Assert.AreEqual(21, shorty.LemmaCalls.Count);
-            Assert.AreEqual(17, shorty.FindRemovableLemmaCalls().Count);
-            Assert.AreEqual(4, shorty.LemmaCalls.Count);
-            Assert.True(shorty.IsProgramValid());
+            Assert.AreEqual(21, daryController.LemmaCalls.Count);
+            Assert.AreEqual(17, daryController.FindRemovableLemmaCalls().Count);
+            Assert.AreEqual(4, daryController.LemmaCalls.Count);
+            Assert.True(daryController.IsProgramValid());
         }
 
         [Test]
@@ -116,14 +116,14 @@ namespace shorty
         {
             Initialise();
             var program = GetProgram("CombinedAsserts.dfy");
-            var shorty = GetShorty(program);
+            var daryController = GetDaryController(program);
 
-            var simplifiedAsserts = shorty.GetSimplifiedAsserts();
+            var simplifiedAsserts = daryController.GetSimplifiedAsserts();
             Assert.AreEqual(1, simplifiedAsserts.Count);
-            Assert.True(shorty.IsProgramValid());
+            Assert.True(daryController.IsProgramValid());
             var assert = (AssertStmt) simplifiedAsserts[0].Item2;
             Assert.True(assert.Expr is ParensExpression);
-            Assert.True(shorty.IsProgramValid());
+            Assert.True(daryController.IsProgramValid());
             //TODO looking into the assertStmt to make sure it actually broke down
         }
 
@@ -132,11 +132,11 @@ namespace shorty
         {
             Initialise();
             var program = GetProgram("ListCopy.dfy");
-            var shorty = GetShorty(program);
+            var daryController = GetDaryController(program);
 
-            var simplifiedInvariants = shorty.GetSimplifiedInvariants();
+            var simplifiedInvariants = daryController.GetSimplifiedInvariants();
             Assert.AreEqual(1, simplifiedInvariants.Count);
-            Assert.True(shorty.IsProgramValid());
+            Assert.True(daryController.IsProgramValid());
         }
 
         [Test]
@@ -144,19 +144,19 @@ namespace shorty
         {
             Initialise();
             var program = GetProgram("Calc.dfy");
-            var shorty = GetShorty(program);
+            var daryController = GetDaryController(program);
 
-            var removedCalcs = shorty.FindRemovableCalcs();
+            var removedCalcs = daryController.FindRemovableCalcs();
 
             using (TextWriter tw = File.CreateText("H:\\dafny\\calc.dfy"))
             {
-                shorty.PrintProgram(tw);
+                daryController.PrintProgram(tw);
             }
 
             Assert.AreEqual(3, removedCalcs.Item1.Count);
             Assert.AreEqual(1, removedCalcs.Item2.Count);
             Assert.AreEqual(1, removedCalcs.Item4.Count);
-            Assert.True(shorty.IsProgramValid());
+            Assert.True(daryController.IsProgramValid());
         }
 
         [Test]
@@ -190,8 +190,8 @@ namespace shorty
             Initialise();
             var program = GetProgram("ListCopy.dfy");
             
-            var shorty = GetShorty(SimpleCloner.CloneProgram(program));
-            var data = shorty.FastRemoveAllRemovables();
+            var daryController = GetDaryController(SimpleCloner.CloneProgram(program));
+            var data = daryController.FastRemoveAllRemovables();
             Assert.AreEqual(1, data.SimplifiedInvariants.Count);
         }
 
@@ -199,9 +199,9 @@ namespace shorty
         public void TestSimultaneousAllTypeRemoverCalcs() {
             Initialise();
             var program = GetProgram("Calc.dfy");
-            var shorty = GetShorty(program);
+            var daryController = GetDaryController(program);
 
-            var data = shorty.FastRemoveAllRemovables();
+            var data = daryController.FastRemoveAllRemovables();
             var simplifiedCalcs = data.SimplifiedCalcs;
             var removedCalcs = data.RemovableCalcs;
 
@@ -210,7 +210,7 @@ namespace shorty
 
             Assert.True(wayOne || wayTwo);
             Assert.AreEqual(1, removedCalcs.Count);
-            Assert.True(shorty.IsProgramValid());
+            Assert.True(daryController.IsProgramValid());
         }
 
         [Test]
@@ -237,9 +237,9 @@ namespace shorty
             var oneAtATimeProg = SimpleCloner.CloneProgram(program);
             var simulProg = SimpleCloner.CloneProgram(program);
 
-            var oneAtATime = new Shorty(oneAtATimeProg, new OneAtATimeRemover(oneAtATimeProg));
-            var simultaneous = new Shorty(simulProg, new SimultaneousMethodRemover(simulProg));
-            var allType = new Shorty(SimpleCloner.CloneProgram(program));
+            var oneAtATime = new DaryController(oneAtATimeProg, new OneAtATimeRemover(oneAtATimeProg));
+            var simultaneous = new DaryController(simulProg, new SimultaneousMethodRemover(simulProg));
+            var allType = new DaryController(SimpleCloner.CloneProgram(program));
             var allRemovableTypeResults = allType.FastRemoveAllRemovables();
 
             var asserts = oneAtATime.FindRemovableAsserts();
@@ -307,7 +307,7 @@ namespace shorty
         }
 
         [Test]
-        public void DaryTest()
+        public void ExternalProgramTest()
         {
             Initialise();
             var stop = new StopChecker();

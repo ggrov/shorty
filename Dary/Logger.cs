@@ -8,7 +8,7 @@ using System.Linq;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 
-namespace shorty
+namespace Dary
 {
     internal class Logger
     {
@@ -56,8 +56,8 @@ namespace shorty
         {
             Console.WriteLine("Checking " + program.FullName);
             var copy = CloneProgram(program);
-            var shorty = new Shorty(copy);
-            return shorty.IsProgramValid();
+            var daryController = new DaryController(copy);
+            return daryController.IsProgramValid();
         }
 
         private Program CloneProgram(Program program)
@@ -286,8 +286,8 @@ namespace shorty
             }
             for (var i = 0; i < _numberOfTests - 1; i++) {
                 var programClone = SimpleCloner.CloneProgram(Program);
-                var shorty = new Shorty(programClone);
-                var runData = RunTest(shorty);
+                var daryController = new DaryController(programClone);
+                var runData = RunTest(daryController);
                 if (!_runTimeTests) continue;
                 averageExecutionTime += runData.Item1;
                 averageTimeBefore += runData.Item2;
@@ -304,17 +304,17 @@ namespace shorty
         private Tuple<long, long, long, int, int> RunInitialTest()
         {
             var programClone = SimpleCloner.CloneProgram(Program);
-            var shorty = new Shorty(programClone);
-            var countBefore = GetCount(shorty);
+            var daryController = new DaryController(programClone);
+            var countBefore = GetCount(daryController);
             var data = new Tuple<long, long, long>(0, 0, 0);
             if (_runTimeTests)
-                data = RunTest(shorty);
+                data = RunTest(daryController);
             else
-                GetRemovedItemsCount(shorty);
-            var countAfter = GetCount(shorty);
-            if (!shorty.IsProgramValid()) {
-//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shotied\\short-"+shorty.Program.Name)) {
-//                    shorty.PrintProgram(writer);
+                GetRemovedItemsCount(daryController);
+            var countAfter = GetCount(daryController);
+            if (!daryController.IsProgramValid()) {
+//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shotied\\short-"+daryController.Program.Name)) {
+//                    daryController.PrintProgram(writer);
 //                }
                 throw new Exception("Program not valid after initial test!");
 
@@ -325,25 +325,25 @@ namespace shorty
         /// <summary>
         /// </summary>
         /// <returns>A tuple containing the execution time, the verification time before and the verification time after</returns>
-        private Tuple<long, long, long> RunTest(Shorty shorty)
+        private Tuple<long, long, long> RunTest(DaryController daryController)
         {
-            var shortyExecutionTimeStopwatch = new Stopwatch();
-            var verificationTimeBefore = GetVerificationTime(shorty);
-            shortyExecutionTimeStopwatch.Start();
-            GetRemovedItemsCount(shorty);
-            shortyExecutionTimeStopwatch.Stop();
-            var verificationTimeAfter = GetVerificationTime(shorty);
-            return new Tuple<long, long, long>(shortyExecutionTimeStopwatch.ElapsedMilliseconds, verificationTimeBefore, verificationTimeAfter);
+            var daryExecutionTimeStopwatch = new Stopwatch();
+            var verificationTimeBefore = GetVerificationTime(daryController);
+            daryExecutionTimeStopwatch.Start();
+            GetRemovedItemsCount(daryController);
+            daryExecutionTimeStopwatch.Stop();
+            var verificationTimeAfter = GetVerificationTime(daryController);
+            return new Tuple<long, long, long>(daryExecutionTimeStopwatch.ElapsedMilliseconds, verificationTimeBefore, verificationTimeAfter);
         }
 
-        private long GetVerificationTime(Shorty shorty)
+        private long GetVerificationTime(DaryController daryController)
         {
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 0;
             var watch = new Stopwatch();
             watch.Start();
-            if (!shorty.IsProgramValid()) {
-//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\Shortied\\short-" + shorty.Program.Name)) {
-//                    shorty.PrintProgram(writer);
+            if (!daryController.IsProgramValid()) {
+//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\Shortied\\short-" + daryController.Program.Name)) {
+//                    daryController.PrintProgram(writer);
 //                }
                 throw new Exception("Cannot find verification time as program is not valid!");
             }
@@ -352,23 +352,23 @@ namespace shorty
             return watch.ElapsedMilliseconds;
         }
 
-        public abstract int GetRemovedItemsCount(Shorty shorty);
+        public abstract int GetRemovedItemsCount(DaryController daryController);
 
-        public abstract int GetCount(Shorty shorty);
+        public abstract int GetCount(DaryController daryController);
     }
 
     internal class AssertLogFinder : LogFinder
     {
         public AssertLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        public override int GetRemovedItemsCount(Shorty shorty)
+        public override int GetRemovedItemsCount(DaryController daryController)
         {
-            return shorty.FindRemovableAsserts().Count;
+            return daryController.FindRemovableAsserts().Count;
         }
 
-        public override int GetCount(Shorty shorty)
+        public override int GetCount(DaryController daryController)
         {
-            return shorty.Asserts.Count;
+            return daryController.Asserts.Count;
         }
     }
 
@@ -376,14 +376,14 @@ namespace shorty
     {
         public InvariantLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        public override int GetRemovedItemsCount(Shorty shorty)
+        public override int GetRemovedItemsCount(DaryController daryController)
         {
-            return shorty.FindRemovableInvariants().Count;
+            return daryController.FindRemovableInvariants().Count;
         }
 
-        public override int GetCount(Shorty shorty)
+        public override int GetCount(DaryController daryController)
         {
-            return shorty.Invariants.Count;
+            return daryController.Invariants.Count;
         }
     }
 
@@ -391,14 +391,14 @@ namespace shorty
     {
         public DecreasesLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        public override int GetRemovedItemsCount(Shorty shorty)
+        public override int GetRemovedItemsCount(DaryController daryController)
         {
-            return shorty.FindRemovableDecreases().Count;
+            return daryController.FindRemovableDecreases().Count;
         }
 
-        public override int GetCount(Shorty shorty)
+        public override int GetCount(DaryController daryController)
         {
-            return shorty.Decreases.Count + shorty.DecreasesWildCards.Sum(wildCardDecreases => wildCardDecreases.Count);
+            return daryController.Decreases.Count + daryController.DecreasesWildCards.Sum(wildCardDecreases => wildCardDecreases.Count);
         }
     }
 
@@ -406,14 +406,14 @@ namespace shorty
     {
         public LemmaCallLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        public override int GetRemovedItemsCount(Shorty shorty)
+        public override int GetRemovedItemsCount(DaryController daryController)
         {
-            return shorty.FindRemovableLemmaCalls().Count;
+            return daryController.FindRemovableLemmaCalls().Count;
         }
 
-        public override int GetCount(Shorty shorty)
+        public override int GetCount(DaryController daryController)
         {
-            return shorty.LemmaCalls.Count;
+            return daryController.LemmaCalls.Count;
         }
     }
 
@@ -421,16 +421,16 @@ namespace shorty
     {
         public CalcLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        public override int GetRemovedItemsCount(Shorty shorty)
+        public override int GetRemovedItemsCount(DaryController daryController)
         {
-            var data = shorty.FindRemovableCalcs();
+            var data = daryController.FindRemovableCalcs();
             return data.Item1.Count + data.Item2.Count;
         }
 
-        public override int GetCount(Shorty shorty)
+        public override int GetCount(DaryController daryController)
         {
             var calcPartCount = 0;
-            foreach (var calcWrap in shorty.Calcs) {
+            foreach (var calcWrap in daryController.Calcs) {
                 var calcStmt = (CalcStmt) calcWrap.Removable;
                 calcPartCount += calcStmt.Hints.Count(hint => hint.Body.Count > 0);
                 calcPartCount += calcStmt.Lines.Count - 1; // -1 because of the dummy
@@ -443,18 +443,18 @@ namespace shorty
     {
         public SimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        protected abstract void RemoveAllOfType(Shorty shorty);
+        protected abstract void RemoveAllOfType(DaryController daryController);
 
-        protected abstract void Simplify(Shorty shorty);
+        protected abstract void Simplify(DaryController daryController);
 
-        protected abstract int CountSubExprsFromItems(Shorty shorty);
+        protected abstract int CountSubExprsFromItems(DaryController daryController);
 
-        public override int GetRemovedItemsCount(Shorty shorty)
+        public override int GetRemovedItemsCount(DaryController daryController)
         {
-            RemoveAllOfType(shorty); //we do not want theese here - this will take a bit of time but is needed for accurate results
-            var initialAmount = CountSubExprsFromItems(shorty);
-            Simplify(shorty);
-            var after = CountSubExprsFromItems(shorty);
+            RemoveAllOfType(daryController); //we do not want theese here - this will take a bit of time but is needed for accurate results
+            var initialAmount = CountSubExprsFromItems(daryController);
+            Simplify(daryController);
+            var after = CountSubExprsFromItems(daryController);
             var amount = initialAmount - after;
             return amount;
         }
@@ -466,10 +466,10 @@ namespace shorty
             return CountExpr(binExpr.E0) + CountExpr(binExpr.E1);
         }
 
-        public override int GetCount(Shorty shorty)
+        public override int GetCount(DaryController daryController)
         {
-            RemoveAllOfType(shorty);
-            return CountSubExprsFromItems(shorty);
+            RemoveAllOfType(daryController);
+            return CountSubExprsFromItems(daryController);
         }
     }
 
@@ -477,15 +477,15 @@ namespace shorty
     {
         public AssertSimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        protected override void RemoveAllOfType(Shorty shorty)
+        protected override void RemoveAllOfType(DaryController daryController)
         {
-            shorty.FindRemovableAsserts();
+            daryController.FindRemovableAsserts();
         }
 
-        protected override int CountSubExprsFromItems(Shorty shorty)
+        protected override int CountSubExprsFromItems(DaryController daryController)
         {
             var amount = 0;
-            foreach (var wrap in shorty.Asserts) {
+            foreach (var wrap in daryController.Asserts) {
                 var assert = (AssertStmt) wrap.Removable;
                 if (assert == null) continue;
                 amount += CountExpr(assert.Expr);
@@ -493,9 +493,9 @@ namespace shorty
             return amount;
         }
 
-        protected override void Simplify(Shorty shorty)
+        protected override void Simplify(DaryController daryController)
         {
-            shorty.GetSimplifiedAsserts();
+            daryController.GetSimplifiedAsserts();
         }
     }
 
@@ -503,20 +503,20 @@ namespace shorty
     {
         public InvariantSimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        protected override void RemoveAllOfType(Shorty shorty)
+        protected override void RemoveAllOfType(DaryController daryController)
         {
-            shorty.FindRemovableInvariants();
+            daryController.FindRemovableInvariants();
         }
 
-        protected override void Simplify(Shorty shorty)
+        protected override void Simplify(DaryController daryController)
         {
-            shorty.GetSimplifiedInvariants();
+            daryController.GetSimplifiedInvariants();
         }
 
-        protected override int CountSubExprsFromItems(Shorty shorty)
+        protected override int CountSubExprsFromItems(DaryController daryController)
         {
             var amount = 0;
-            foreach (var wrap in shorty.Invariants) {
+            foreach (var wrap in daryController.Invariants) {
                 var invariant = wrap.Removable;
                 if (invariant == null) continue;
                 amount += CountExpr(invariant.E);
@@ -529,30 +529,24 @@ namespace shorty
     {
         public EverythingLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
 
-        public override int GetRemovedItemsCount(Shorty shorty)
+        public override int GetRemovedItemsCount(DaryController daryController)
         {
             var amount = 0;
-            amount += shorty.FindRemovableAsserts().Count;
-            amount += shorty.FindRemovableInvariants().Count;
-            amount += shorty.FindRemovableDecreases().Count;
-            amount += shorty.FindRemovableLemmaCalls().Count;
-            amount += shorty.FindRemovableCalcs().Item1.Count;
-            amount += shorty.GetSimplifiedAsserts().Count;
-            amount += shorty.GetSimplifiedInvariants().Count;
+            amount += daryController.FindRemovableAsserts().Count;
+            amount += daryController.FindRemovableInvariants().Count;
+            amount += daryController.FindRemovableDecreases().Count;
+            amount += daryController.FindRemovableLemmaCalls().Count;
+            amount += daryController.FindRemovableCalcs().Item1.Count;
+            amount += daryController.GetSimplifiedAsserts().Count;
+            amount += daryController.GetSimplifiedInvariants().Count;
 //            return amount;
             return 0;
 
         }
 
-        public override int GetCount(Shorty shorty)
+        public override int GetCount(DaryController daryController)
         {
-            var amount = 0;
-//            amount += shorty.Asserts.Count;
-//            amount += shorty.Invariants.Count;
-//            amount += shorty.Decreases.Count;
-//            amount += shorty.LemmaCalls.Count;
-//            amount += shorty.Calcs.Count;
-            return amount;
+            return 0;
         }
     }
 

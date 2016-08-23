@@ -11,9 +11,9 @@ using System.Threading.Tasks;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 
-namespace shorty
+namespace Dary
 {
-    class ShortyMain
+    class DaryMain
     {
         private static readonly ErrorReporter Reporter = new InvisibleErrorReporter();
 
@@ -154,9 +154,9 @@ namespace shorty
         {
             var betterSolutionFound = false;
             try {
-                var shorty = new Shorty(program);
-                var assertSolutions = shorty.TestDifferentAssertRemovals();
-                var invariantSolutions = shorty.TestDifferentInvariantRemovals();
+                var daryController = new DaryController(program);
+                var assertSolutions = daryController.TestDifferentAssertRemovals();
+                var invariantSolutions = daryController.TestDifferentInvariantRemovals();
 
                 writer.WriteLine("ASSERTS for " + program.Name);
                 writer.WriteLine();
@@ -214,16 +214,16 @@ namespace shorty
         {
             Console.WriteLine("Simplifying " + program.Name);
             try {
-                var shorty = new Shorty(program, new OneAtATimeRemover(program));
-                shorty.FindRemovableAsserts();
-                shorty.FindRemovableInvariants();
-                shorty.FindRemovableDecreases();
-                shorty.FindRemovableLemmaCalls();
-                shorty.FindRemovableCalcs();
-                shorty.GetSimplifiedAsserts();
-                shorty.GetSimplifiedInvariants();
+                var daryController = new DaryController(program, new OneAtATimeRemover(program));
+                daryController.FindRemovableAsserts();
+                daryController.FindRemovableInvariants();
+                daryController.FindRemovableDecreases();
+                daryController.FindRemovableLemmaCalls();
+                daryController.FindRemovableCalcs();
+                daryController.GetSimplifiedAsserts();
+                daryController.GetSimplifiedInvariants();
                 using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shortied\\" + program.Name + ".txt")) {
-                    shorty.PrintProgram(writer);
+                    daryController.PrintProgram(writer);
                 }
             }
             catch (Exception e) {

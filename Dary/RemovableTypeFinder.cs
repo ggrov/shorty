@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Dafny;
 
-namespace shorty
+namespace Dary
 {
     internal class RemovableTypeFinder
     {
