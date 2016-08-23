@@ -567,7 +567,7 @@ namespace Dary
         }
     }
 
-    internal class MethodRemover
+    public class MethodRemover
     {
         private readonly Program _program;
 

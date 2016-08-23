@@ -6,8 +6,9 @@ using System.Reflection;
 using NUnit.Framework;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
+using Dary;
 
-namespace Dary
+namespace DaryTools
 {
     [TestFixture]
     internal class DaryTest
@@ -316,7 +317,7 @@ namespace Dary
         {
             Initialise();
             var stop = new StopChecker();
-            var dary = new Dary(stop);
+            var dary = new Dary.Dary(stop);
             var program = GetProgram("Streams.dfy");
 
             var results = dary.ProcessProgram(program);
