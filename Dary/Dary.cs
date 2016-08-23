@@ -88,8 +88,17 @@ namespace Dary
                 removableTokenData.Add(new DaryResult(invariant.E.tok, GetExpressionLength(invariant.E) + "invariant ".Length, "Invariant"));
             foreach (var removableDecrease in simpData.RemovableDecreases)
                 removableTokenData.Add(new DaryResult(removableDecrease.tok, GetExpressionLength(removableDecrease) + "decreases ".Length, "Decreases Expression"));
-            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls)
-                removableTokenData.Add(new DaryResult(removableLemmaCall.Tok, removableLemmaCall.EndTok, "Lemma Call"));
+            foreach (var removableLemmaCall in simpData.RemovableLemmaCalls) {
+                int nameLength;
+                try {
+                    nameLength = (((removableLemmaCall.Rhss[0] as ExprRhs).Expr as ApplySuffix).Lhs as NameSegment).Name.Length;
+                }
+                catch (Exception) {
+                    continue;
+                }
+                var startToken = new Bpl.Token(removableLemmaCall.Tok.line, removableLemmaCall.Tok.col - nameLength);
+                removableTokenData.Add(new DaryResult(startToken, removableLemmaCall.EndTok, "Lemma Call"));
+            }
             foreach (var removableCalc in simpData.RemovableCalcs)
                 removableTokenData.Add(new DaryResult(removableCalc.Tok, removableCalc.EndTok, "Calc Statement"));
 

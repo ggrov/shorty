@@ -312,7 +312,7 @@ namespace Dary
             Initialise();
             var stop = new StopChecker();
             var dary = new Dary(stop);
-            var program = GetProgram("Calc.dfy");
+            var program = GetProgram("Streams.dfy");
 
             var results = dary.ProcessProgram(program);
         }
