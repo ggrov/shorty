@@ -128,6 +128,7 @@ namespace Dary
                     continue;
                 }
                 var startToken = new Bpl.Token(removableLemmaCall.Tok.line, removableLemmaCall.Tok.col - nameLength);
+                startToken.pos = removableLemmaCall.Tok.pos - nameLength;
                 removableTokenData.Add(new DaryResult(startToken, removableLemmaCall.EndTok, "Lemma Call"));
             }
             foreach (var removableCalc in simpData.RemovableCalcs)

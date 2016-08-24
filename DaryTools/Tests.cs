@@ -21,8 +21,8 @@ namespace DaryTools
         private void Initialise()
         {
             DafnyOptions.Install(new DafnyOptions());
-            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
-//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
+//            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "H:\\dafny\\repos\\tacny\\tacny\\Binaries\\z3.exe";
+            Bpl.CommandLineOptions.Clo.Z3ExecutablePath = "C:\\users\\Duncan\\Documents\\tacny\\tacny\\Binaries\\z3.exe";
             Bpl.CommandLineOptions.Clo.ApplyDefaultOptions();
             Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
             DafnyOptions.O.ProverKillTime = 10;
@@ -318,7 +318,7 @@ namespace DaryTools
             Initialise();
             var stop = new StopChecker();
             var dary = new Dary.Dary(stop);
-            var program = GetProgram("Streams.dfy");
+            var program = GetProgram("Calc.dfy");
 
             var results = dary.ProcessProgram(program);
         }
