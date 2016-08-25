@@ -25,7 +25,7 @@ ghost method Lemma(a: array<int>, k: int, m: int)
   requires 0 <= k;
   requires k < a.Length ==> m <= a[k];
   ensures forall i :: k <= i < k+m && i < a.Length ==> a[i] != 0;
-  decreases m;
+  decreases m
 {
   if (0 < m && k < a.Length) {
     assert a[k] != 0;

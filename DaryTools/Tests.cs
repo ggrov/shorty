@@ -263,19 +263,19 @@ namespace DaryTools
             var simSimplifiedInvariants = simultaneous.GetSimplifiedInvariants();
             var oaatRemovedCalcs = oneAtATime.FindRemovableCalcs();
             var simulRemovedCalcs = simultaneous.FindRemovableCalcs();
-
-            using (TextWriter tw = File.CreateText("H:\\dafny\\oaat.dfy")) {
-//            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\oaat.dfy")) {
-                oneAtATime.PrintProgram(tw);
-            }
-            using (TextWriter tw = File.CreateText("H:\\dafny\\allType.dfy")) {
-//            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\simult.dfy")) {
-                allType.PrintProgram(tw);
-            }
-            using (TextWriter tw = File.CreateText("H:\\dafny\\simul.dfy")) {
-//            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\allType.dfy")) {
-                simultaneous.PrintProgram(tw);
-            }
+//
+//            using (TextWriter tw = File.CreateText("H:\\dafny\\oaat.dfy")) {
+////            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\oaat.dfy")) {
+//                oneAtATime.PrintProgram(tw);
+//            }
+//            using (TextWriter tw = File.CreateText("H:\\dafny\\allType.dfy")) {
+////            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\simult.dfy")) {
+//                allType.PrintProgram(tw);
+//            }
+//            using (TextWriter tw = File.CreateText("H:\\dafny\\simul.dfy")) {
+////            using (TextWriter tw = File.CreateText("C:\\users\\Duncan\\Documents\\allType.dfy")) {
+//                simultaneous.PrintProgram(tw);
+//            }
 
 
             Assert.True(oneAtATime.IsProgramValid());
@@ -318,7 +318,7 @@ namespace DaryTools
             Initialise();
             var stop = new StopChecker();
             var dary = new Dary.Dary(stop);
-            var program = GetProgram("Calc.dfy");
+            var program = GetProgram("Combinators.dfy");
 
             var results = dary.ProcessProgram(program);
         }

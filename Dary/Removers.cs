@@ -1275,8 +1275,10 @@ namespace Dary
                 foreach (var conj in _allConjunctions[member]) {
                     if (conj.Finished) continue;
                     conj.RemoveNext(_removedBrokenItems);
-                    if (conj.Finished)
+                    if (conj.Finished) {
                         _conjunctionIndex[member]++;
+                        continue;
+                    }
                     return false;
                 }
             }

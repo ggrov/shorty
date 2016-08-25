@@ -89,6 +89,12 @@ namespace DaryTools
                 }
             }
 
+            // Count all items
+
+            //remove all items (time for extra runs
+
+            //Log all items ( and count any extras)
+
             LogFile("assert-removal", "Asserts", new AssertLogFinderFactory());
             LogFile("assert-simplification","Assert Subexpressions", new AssertSimpLogFinderFactory());
             LogFile("invariant-removal", "Invariants", new InvariantLogFinderFactory());
@@ -182,6 +188,89 @@ namespace DaryTools
                 tw.WriteLine("Total, {0}, {1}, {2}, {3}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%");
         }
     }
+
+    class LogData
+    {
+        public Program OriginalProgram { get; }
+        public Program ModifiedProgram { get; private set; }
+        public SimplificationData SimpData { get; private set; }
+
+        public long VerificationTimeBefore { get; private set; }
+        public long VerificationTimeAfter { get; private set; }
+
+
+        private readonly int _numberOfVerifications = 0;
+
+        public LogData(Program program)
+        {
+            OriginalProgram = SimpleCloner.CloneProgram(program);
+        }
+
+        public LogData(Program program, int numberOfVerifications)
+        {
+            _numberOfVerifications = numberOfVerifications;
+            OriginalProgram = SimpleCloner.CloneProgram(program);
+        }
+
+        public void PerformLogging()
+        {
+            GetVerificationTimeBefore();
+            ModifiedProgram = SimpleCloner.CloneProgram(OriginalProgram);
+            var daryController = new DaryController(ModifiedProgram);
+            SimpData = daryController.FastRemoveAllRemovables();
+            GetVerificationTimeAfter();
+        }
+
+        private void GetVerificationTimeBefore()
+        {
+            if (_numberOfVerifications < 1) return;
+            VerificationTimeBefore = GetAverageVerificationTime(OriginalProgram);
+        }
+        private void GetVerificationTimeAfter()
+        {
+            if (_numberOfVerifications < 1) return;
+            VerificationTimeAfter = GetAverageVerificationTime(ModifiedProgram);
+        }
+
+        private long GetAverageVerificationTime(Program program)
+        {
+            long verificationTime = 0;
+            for (var i = 0; i < _numberOfVerifications; i++) {
+                verificationTime += GetVerificationTime(program);
+            }
+            return verificationTime/_numberOfVerifications;
+        }
+
+        private long GetVerificationTime(Program program)
+        {
+            var verifier = new SimpleVerifier();
+            var sw = new Stopwatch();
+            var origSnapshotSetting = DafnyOptions.O.VerifySnapshots;
+            DafnyOptions.O.VerifySnapshots = 0;
+            sw.Start();
+            verifier.IsProgramValid(program);
+            sw.Stop();
+            DafnyOptions.O.VerifySnapshots = origSnapshotSetting;
+            return sw.ElapsedMilliseconds;
+        }
+
+    }
+    
+
+    interface ICounter
+    {
+        int GetCount(DaryController daryController);
+    }
+
+    class AssertCounter : ICounter
+    {
+        public int GetCount(DaryController daryController)
+        {
+            return daryController.Asserts.Count;
+        }
+    }
+
+    
 
     #region LogFinder Factories
 
