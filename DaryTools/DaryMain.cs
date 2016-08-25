@@ -121,7 +121,7 @@ namespace DaryTools
         
         public static void RunLogger(List<Program> programs)
         {
-            var logger = new Logger("H:\\dafny\\experimentResults", programs, 3, true);
+            var logger = new Logger("H:\\dafny\\experimentResults", programs, 1, false);
 //            Logger logger = new Logger("C:\\users\\Duncan\\Documents\\dafny\\experimentResults", programs, 1, false);
             logger.LogAllData();
         }

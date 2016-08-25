@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Diagnostics.Contracts;
 using System.IO;
@@ -8,6 +9,7 @@ using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 using Program = Microsoft.Dafny.Program;
 using Dary;
+using Dary = Dary.Dary;
 
 namespace DaryTools
 {
@@ -19,6 +21,7 @@ namespace DaryTools
         private readonly int _numberOfTests;
         private readonly bool _runTimeTests;
         private readonly string _directory;
+        List<LogData> _allLoggedData = new List<LogData>();
 
         public Logger(string directory, List<Program> programs, int numberOfTest, bool runTimeTests = true)
         {
@@ -57,23 +60,16 @@ namespace DaryTools
         private bool TryEnsureProgramVerifies(Program program)
         {
             Console.WriteLine("Checking " + program.FullName);
-            var copy = CloneProgram(program);
+            var copy = SimpleCloner.CloneProgram(program);
             var daryController = new DaryController(copy);
             return daryController.IsProgramValid();
         }
 
-        private Program CloneProgram(Program program)
-        {
-            var cloner = new Cloner();
-            var moduleDecl = new LiteralModuleDecl(cloner.CloneModuleDefinition(program.DefaultModuleDef, program.Name), null);
-            return new Program(program.FullName, moduleDecl, program.BuiltIns, new InvisibleErrorReporter());
-        }
-
-        private void WriteHeadings(TextWriter tw, string thing)
+        private void WriteHeadings(TextWriter tw, string thing, bool isSimp)
         {
             tw.Write("Program Name, {0} Before, {0} After, {0} Removed, Removal Percentage", thing);
-            if (_runTimeTests)
-                tw.WriteLine(", Avg Execution Time(ms), Avg Verification Time Before, Avg Verification Time After, Avg Verification Time Improvement");
+            if (isSimp)
+                tw.WriteLine(", Remaining Items Simplified, Percentage of remaining items simplified, Subexpressions Before Simplification, Subexpressions After Simplification, Subexpressions Removed, Subexpression Removal Percentage");
             else
                 tw.WriteLine();
         }
@@ -89,110 +85,166 @@ namespace DaryTools
                 }
             }
 
-            // Count all items
-
-            //remove all items (time for extra runs
-
-            //Log all items ( and count any extras)
-
-            LogFile("assert-removal", "Asserts", new AssertLogFinderFactory());
-            LogFile("assert-simplification","Assert Subexpressions", new AssertSimpLogFinderFactory());
-            LogFile("invariant-removal", "Invariants", new InvariantLogFinderFactory());
-            LogFile("invariant-simplification","Invariant Subexpressions", new InvariantSimpLogFinderFactory());
-            LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallLogFinderFactory());
-            LogFile("decreases-removal", "Decreases", new DecreasesLogFinderFactory());
-            LogFile("calc-removal", "Calc Parts", new CalcLogFinderFactory());
-            if(_runTimeTests)
-                LogFile("everything-removal", "", new EverythingLogFinderFactory()); //This will not actually count anything as the information will not be entirely useful (e.g. does a part of an assert count as much as an assert?)
-        }
-
-        private void LogFile(string fileName, string itemsName, ILogFinderFactory logFinderFactory)
-        {
-            var fullFileName = _directory + fileName + ".csv";
-            using (TextWriter tw = File.CreateText(fullFileName))
-            {
-                WriteHeadings(tw, itemsName);
-                var count = 1;
-                var data = new List<Tuple<string, int, int, float, float, float>>();
-                foreach (var program in Programs)
-                {
-                    var logFinder = logFinderFactory.GetLogFinder(program, _numberOfTests, _runTimeTests);
-                    try
-                    {
-                        Console.WriteLine("Removing {3} from {0}: {1}/{2} ", program.Name, count++, Programs.Count, itemsName.ToLower());
-                        data.Add(logFinder.GetLogData());
-                    }
-                    catch (Exception e)
-                    {
-                        tw.WriteLine("{0}, FAILED", program.Name);
-                        Console.WriteLine("  => Failed to remove {2} from {0}: {1}", program.Name, e.Message, itemsName.ToLower());
-                    }
-                }
-
-                var numberOfPrograms = 0;
-
-                foreach (var tuple in data) {
-                    var before = tuple.Item2;
-                    if (before == 0) continue;
-                    numberOfPrograms++;
-                }
-                tw.WriteLine("{0}/{1} programs found contain {2}", numberOfPrograms, data.Count, itemsName);
-                LogTupleListData(data, tw);
+            var programNumber = 0;
+            
+            foreach (var program in Programs) {
+                var logData = _runTimeTests ? new LogData(program, _numberOfTests) : new LogData(program);
+                Console.WriteLine("Getting data for {0} ({1}/{2})", program.Name, ++programNumber, Programs.Count);
+                logData.PerformLogging();
+                _allLoggedData.Add(logData);
             }
-        }
 
-        private void LogTupleListData(List<Tuple<string, int, int, float, float, float>> data, TextWriter tw)
-        {
-            var totalBefore = 0;
-            var totalRemoved = 0;
-            var totalAfter = 0;
-            float totalTime = 0;
-            float totalVerTimeBefore = 0;
-            float totalVerTimeAfter = 0;
+            
+            LogFile("assert-removal", "Asserts", new AssertCounterFactory());
+            LogFile("invariant-removal", "Invariants", new InvariantCounterFactory());
+            LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallCounterFactory());
+            LogFile("decreases-removal", "Decreases", new DecreasesCounterFactory());
+            LogFile("calc-removal", "Calcs", new CalcCounterFactory());
 
             
 
-            tw.WriteLine("{0} programs containing");
+            LogSummaryData();
 
-            foreach (var tuple in data) {
-                var name = tuple.Item1;
-                var before = tuple.Item2;
-                if(before == 0) continue;
-                var after = tuple.Item3;
-                var removed = before - after;
-                var percentage = 100f - ((float) after/(float) before)*100f;
-                totalBefore += before;
-                totalRemoved += removed;
-                totalAfter += after;
+//            if(_runTimeTests)
+//                LogFile("everything-removal", "", new EverythingLogFinderFactory()); //This will not actually count anything as the information will not be entirely useful (e.g. does a part of an assert count as much as an assert?)
+
+
+
+        }
+
+        private void LogSummaryData()
+        {
+            var beforeAndAfterLineCounts = new Dictionary<LogData, Tuple<int, int>>();
+            foreach (var logData in _allLoggedData) 
+                beforeAndAfterLineCounts.Add(logData, logData.PrintBeforeAndAfter(_directory));
+
+            using (TextWriter tw = File.CreateText(_directory + "\\summartData.csv")) {
+                tw.Write("Program name, loc before, loc after, loc removed");
+                var totalLocBefore = 0;
+                var totalLocAfter = 0;
+                long totalVerTimeBefore = 0;
+                long totalVerTimeAfter = 0;
+                if(_runTimeTests)
+                    tw.WriteLine(",Avg verification time before, Avg verification time after, Avg time improvement");
+                else 
+                    tw.WriteLine();
+                foreach (var logData in _allLoggedData) {
+                    var locBefore = beforeAndAfterLineCounts[logData].Item1;
+                    var locAfter = beforeAndAfterLineCounts[logData].Item2;
+                    totalLocBefore += locBefore;
+                    totalLocAfter += locAfter;
+                    tw.Write("{0},{1},{2},{3}", logData.OriginalProgram.Name, locBefore, locAfter, locBefore-locAfter);
+                    if (_runTimeTests) {
+                        tw.WriteLine("{0},{1},{2}",logData.VerificationTimeBefore, logData.VerificationTimeAfter, logData.VerificationTimeBefore - logData.VerificationTimeAfter);
+                        totalVerTimeBefore += logData.VerificationTimeBefore;
+                        totalVerTimeAfter += logData.VerificationTimeAfter;
+                    }
+                    else
+                        tw.WriteLine();
+                }
+                tw.WriteLine();
+                tw.Write("Total,{0},{1},{2}",totalLocBefore, totalLocAfter, totalLocBefore-totalLocAfter);
+                if (_runTimeTests)
+                    tw.WriteLine("{0},{1},{2}", totalVerTimeBefore, totalVerTimeAfter, totalVerTimeBefore - totalVerTimeAfter);
+                else
+                    tw.WriteLine();
+
+                if (_allLoggedData.Count == 0) return;
+                float avgLocBefore = (float) ((float) totalLocBefore/(float) _allLoggedData.Count);
+                float avgLocAfter = (float) ((float) totalLocAfter/(float) _allLoggedData.Count);
+                float avgLocRemoved = (float) ((float) totalLocBefore - totalLocAfter)/(float) _allLoggedData.Count;
+
+                tw.Write("Average,{0},{1},{2}", avgLocBefore, avgLocAfter, avgLocRemoved);
+
                 if (_runTimeTests) {
-                    var executionTime = tuple.Item4;
-                    var verTimeBefore = tuple.Item5;
-                    var verTimeAfter = tuple.Item6;
-                    var verTimeImprovement = verTimeBefore - verTimeAfter;
-                    tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}, {8}", name, before, after, removed, percentage + "%", executionTime, verTimeBefore, verTimeAfter, verTimeImprovement);
-                    totalTime += executionTime;
-                    totalVerTimeBefore += verTimeBefore;
-                    totalVerTimeAfter += verTimeAfter;
+                    float avgVerTimeBefore = (float) ((float) totalVerTimeBefore/(float) _allLoggedData.Count);
+                    float avgVerTimeAfter = (float) ((float) totalVerTimeAfter/(float) _allLoggedData.Count);
+                    float avgVerTimeImprovement = (float) ((float) totalVerTimeBefore - totalVerTimeAfter)/(float) _allLoggedData.Count;
+
+                    tw.WriteLine("{0},{1},{2}", avgVerTimeBefore, avgVerTimeAfter, avgVerTimeImprovement);
                 }
                 else
-                    tw.WriteLine("{0}, {1}, {2}, {3}, {4}", name, before, after, removed, percentage + "%");
+                    tw.WriteLine();
             }
+        }
 
-            var overAllPercentage = 100f - ((float) totalAfter/(float) totalBefore)*100;
-            if (_runTimeTests) {
-                var totalVerTimeImprovement = totalVerTimeBefore - totalVerTimeAfter;
-                tw.WriteLine("{0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%", totalTime, totalVerTimeBefore, totalVerTimeAfter, totalVerTimeImprovement);
-                tw.WriteLine(",,,,,,,Avg ver Time Improvement:,{0}", totalVerTimeImprovement/Programs.Count);
+        private void LogFile(string fileName, string itemsName, ICounterFactory counterFactory)
+        {
+            var fullFileName = _directory + fileName + ".csv";
+            using (TextWriter tw = File.CreateText(fullFileName)) {
+                bool isSimp = false;
+                if (_allLoggedData.Count==0) return;
+
+                if (counterFactory.GetNewCounter(_allLoggedData[0]) is SimpCounter)
+                    isSimp = true;
+                
+                WriteHeadings(tw, itemsName, isSimp);
+                var count = 1;
+
+
+                var totalBefore = 0;
+                var totalAfter = 0;
+                var totalRemoved = 0;
+
+                var totalSubexprsBefore = 0;
+                var totalSubexprsAfter = 0;
+                var totalNumItemsSimplified = 0;
+
+                //var data = new List<Tuple<string, int, int, float, float, float>>();
+                foreach (var logData in _allLoggedData) {
+                    var counter = counterFactory.GetNewCounter(logData);
+                    var countBefore = counter.GetCountBefore();
+                    if(countBefore == 0) continue;
+                    var countAfter = counter.GetCountAfter();
+                    var countRemoved = counter.GetRemovedCount();
+                    float removalPercentage = ((float) countRemoved/(float) countBefore) * 100;
+                    totalBefore += countBefore;
+                    totalAfter += countAfter;
+                    totalRemoved += countRemoved;
+
+                    tw.Write("{0},{1},{2},{3},{4}%",logData.OriginalProgram.Name, countBefore, countAfter, countRemoved, removalPercentage);
+                    if (!isSimp || countAfter == 0) {
+                        tw.WriteLine();
+                    }
+                    else {
+                        var simpCounter = counter as SimpCounter;
+                        var numberOfItemsSimplified = simpCounter.GetNumberOfRemainingThatCanBeSimplified();
+                        var subexprsBeforeSimplification = simpCounter.GetNumberOfSubexpressionsAfterRemoval();
+                        var subexprsAfterSimplification = simpCounter.GetNumberOfSubexpressionsAfterSimplification();
+                        var subexprsRemoved = subexprsBeforeSimplification - subexprsAfterSimplification;
+                        totalNumItemsSimplified += numberOfItemsSimplified;
+                        totalSubexprsBefore += subexprsBeforeSimplification;
+                        totalSubexprsAfter += subexprsAfterSimplification;
+                        float subexprRemovedPercentage = ((float) subexprsRemoved/(float) subexprsBeforeSimplification) * 100f;
+                        float numberRemainingItemsSimplified = ((float)numberOfItemsSimplified/(float)countAfter)*100f;
+                        tw.WriteLine(",{0},{1}%,{2},{3},{4},{5}%",numberOfItemsSimplified, numberRemainingItemsSimplified, subexprsBeforeSimplification, subexprsAfterSimplification,
+                            subexprsRemoved, subexprRemovedPercentage);
+                    }
+                }
+                tw.WriteLine();
+                float avgRemovalPct = ((float)totalRemoved/(float)totalBefore)*100f;
+                tw.Write("Total,{0},{1},{2},{3}%", totalBefore, totalAfter, totalRemoved, avgRemovalPct);
+                if (!isSimp || totalAfter == 0)
+                    tw.WriteLine();
+                else {
+                    var subExprsRemoved = totalSubexprsBefore - totalSubexprsAfter;
+                    float subExprRemovalPct = ((float)subExprsRemoved/(float)totalSubexprsBefore)*100f;
+                    float pctOfRemainingSimplified = ((float) totalNumItemsSimplified/(float) totalAfter)*100f;
+                    tw.WriteLine(",{0},{1}%,{2},{3},{4},{5}%",totalNumItemsSimplified, pctOfRemainingSimplified,
+                        totalSubexprsBefore, totalSubexprsAfter, subExprsRemoved, subExprRemovalPct);
+                }
             }
-            else
-                tw.WriteLine("Total, {0}, {1}, {2}, {3}", totalBefore, totalAfter, totalRemoved, overAllPercentage + "%");
         }
     }
 
     class LogData
     {
-        public Program OriginalProgram { get; }
+        public Program OriginalProgram { get; private set; }
         public Program ModifiedProgram { get; private set; }
+
+        public DaryController OriginalDaryController { get; private set; }
+        public DaryController ModifiedDaryController { get; private set; }
+
         public SimplificationData SimpData { get; private set; }
 
         public long VerificationTimeBefore { get; private set; }
@@ -212,12 +264,34 @@ namespace DaryTools
             OriginalProgram = SimpleCloner.CloneProgram(program);
         }
 
+        public Tuple<int,int> PrintBeforeAndAfter(string directory)
+        {
+            var plainFileName = OriginalProgram.Name.Substring(0, OriginalProgram.Name.Length - 4);
+            var directoryName = directory + "\\generatedPrograms\\" + plainFileName;
+            Directory.CreateDirectory(directoryName);
+
+            var beforeFileName = directoryName + "\\" + plainFileName + "-before.dfy";
+            var afterFileName = directoryName + "\\" + plainFileName + "-after.dfy";
+
+            using (TextWriter tw = File.CreateText(beforeFileName))
+                OriginalDaryController.PrintProgram(tw);
+
+            using (TextWriter tw = File.CreateText(afterFileName))
+                ModifiedDaryController.PrintProgram(tw);
+            
+            var lineCountBefore = File.ReadLines(beforeFileName).Count();
+            var lineCountAfter = File.ReadLines(afterFileName).Count();
+
+            return new Tuple<int, int>(lineCountBefore, lineCountAfter);
+        }
+
         public void PerformLogging()
         {
             GetVerificationTimeBefore();
+            OriginalDaryController = new DaryController(OriginalProgram); //this is for counting later...
             ModifiedProgram = SimpleCloner.CloneProgram(OriginalProgram);
-            var daryController = new DaryController(ModifiedProgram);
-            SimpData = daryController.FastRemoveAllRemovables();
+            ModifiedDaryController = new DaryController(ModifiedProgram);
+            SimpData = ModifiedDaryController.FastRemoveAllRemovables();
             GetVerificationTimeAfter();
         }
 
@@ -253,276 +327,251 @@ namespace DaryTools
             DafnyOptions.O.VerifySnapshots = origSnapshotSetting;
             return sw.ElapsedMilliseconds;
         }
-
     }
+
+    #region Counters
     
+    internal abstract class Counter {
+        
+        protected LogData logData;
 
-    interface ICounter
-    {
-        int GetCount(DaryController daryController);
+        public Counter(LogData logData)
+        {
+            this.logData = logData;
+        }
+
+        public abstract int GetCountBefore();
+        public abstract int GetCountAfter();
+        public abstract int GetRemovedCount();
     }
 
-    class AssertCounter : ICounter
+    internal abstract class SimpCounter : Counter
     {
-        public int GetCount(DaryController daryController)
+        protected SimpCounter(LogData logData) : base(logData) {}
+        public abstract int GetNumberOfRemainingThatCanBeSimplified();
+        public abstract int GetNumberOfSubexpressionsAfterRemoval();
+        public abstract int GetNumberOfSubexpressionsAfterSimplification();
+        protected int CountExpr(Expression expr)
         {
-            return daryController.Asserts.Count;
+            var binExpr = expr as BinaryExpr;
+            if (binExpr == null || binExpr.Op != BinaryExpr.Opcode.And) return 1;
+            return CountExpr(binExpr.E0) + CountExpr(binExpr.E1);
         }
     }
 
-    
-
-    #region LogFinder Factories
-
-    internal interface ILogFinderFactory
+    internal class AssertCounter : SimpCounter
     {
-        LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests);
-    }
+        public AssertCounter(LogData logData) : base(logData) {}
 
-    internal class AssertLogFinderFactory : ILogFinderFactory
-    {
-        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
+        public override int GetCountBefore()
         {
-            return new AssertLogFinder(program, numberOfTests, runTimeTests);
-        }
-    }
-
-    internal class AssertSimpLogFinderFactory : ILogFinderFactory
-    {
-        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
-        {
-            return new AssertSimpLogFinder(program, numberOfTests, runTimeTests);
-        }
-    }
-
-    internal class InvariantLogFinderFactory : ILogFinderFactory
-    {
-        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
-        {
-            return new InvariantLogFinder(program, numberOfTests, runTimeTests);
-        }
-    }
-
-    internal class InvariantSimpLogFinderFactory : ILogFinderFactory
-    {
-        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
-        {
-            return new InvariantSimpLogFinder(program, numberOfTests, runTimeTests);
-        }
-    }
-
-    internal class LemmaCallLogFinderFactory : ILogFinderFactory
-    {
-        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
-        {
-            return new LemmaCallLogFinder(program, numberOfTests, runTimeTests);
-        }
-    }
-
-    internal class DecreasesLogFinderFactory : ILogFinderFactory
-    {
-        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
-        {
-            return new DecreasesLogFinder(program, numberOfTests, runTimeTests);
-        }
-    }
-
-    internal class CalcLogFinderFactory : ILogFinderFactory
-    {
-        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
-        {
-            return new CalcLogFinder(program, numberOfTests, runTimeTests);
-        }
-    }
-    internal class EverythingLogFinderFactory : ILogFinderFactory
-    {
-        public LogFinder GetLogFinder(Program program, int numberOfTests, bool runTimeTests)
-        {
-            return new EverythingLogFinder(program, numberOfTests, runTimeTests);
-        }
-    }
-
-
-    #endregion
-
-    #region LogFinders
-
-    internal abstract class LogFinder
-    {
-        protected Program Program;
-        private readonly int _numberOfTests;
-        private readonly bool _runTimeTests;
-
-        protected LogFinder(Program program, int numberOfTests, bool runTimeTest)
-        {
-            Program = program;
-            _numberOfTests = numberOfTests;
-            _runTimeTests = runTimeTest;
+            return logData.OriginalDaryController.Asserts.Count;
         }
 
-        public Tuple<string, int, int, float, float, float> GetLogData()
+        public override int GetCountAfter()
         {
-            float averageExecutionTime = 0;
-            float averageTimeBefore = 0;
-            float averageTimeAfter = 0;
+            return logData.ModifiedDaryController.Asserts.Count;
+        }
 
-            var initResults = RunInitialTest();
-            var countBefore = initResults.Item4;
-            var countAfter = initResults.Item5;
+        public override int GetRemovedCount()
+        {
+            return logData.SimpData.RemovableAsserts.Count;
+        }
 
-            if (_runTimeTests) {
-                averageExecutionTime += initResults.Item1;
-                averageTimeBefore += initResults.Item2;
-                averageTimeAfter += initResults.Item3;
+        public override int GetNumberOfRemainingThatCanBeSimplified()
+        {
+            return logData.SimpData.SimplifiedAsserts.Count;
+        }
+
+        public override int GetNumberOfSubexpressionsAfterRemoval()
+        {
+            var amount = 0;
+            //As the final results will have already simplified, we count all the removed
+            //subexpressions then subtract that from the total original subexpressions
+            var daryControllerOriginal = logData.OriginalDaryController;
+
+            //unwrap the original asserts
+            var allOriginalAsserts = new List<AssertStmt>();
+            foreach (var assertWrap in daryControllerOriginal.Asserts) {
+                allOriginalAsserts.Add(assertWrap.Removable as AssertStmt);
             }
-            for (var i = 0; i < _numberOfTests - 1; i++) {
-                var programClone = SimpleCloner.CloneProgram(Program);
-                var daryController = new DaryController(programClone);
-                var runData = RunTest(daryController);
-                if (!_runTimeTests) continue;
-                averageExecutionTime += runData.Item1;
-                averageTimeBefore += runData.Item2;
-                averageTimeAfter += runData.Item3;
+
+            var totalSubExprsCount = CountSubexpressions(allOriginalAsserts);
+            var removedSubExprsCount = CountSubexpressions(logData.SimpData.RemovableAsserts);
+
+            amount = totalSubExprsCount - removedSubExprsCount;
+            return amount;
+        }
+
+        private int CountSubexpressions(List<AssertStmt> allOriginalAsserts)
+        {
+            var amount = 0;
+            foreach (var assert in allOriginalAsserts)
+                amount += CountExpr(assert.Expr);
+            return amount;
+        }
+
+        public override int GetNumberOfSubexpressionsAfterSimplification()
+        {
+            var amountRemoved = 0;
+            var total = GetNumberOfSubexpressionsAfterRemoval();
+            foreach (var tup in logData.SimpData.SimplifiedAsserts)
+                amountRemoved += CountExpr((tup.Item1 as AssertStmt).Expr) - CountExpr((tup.Item2 as AssertStmt).Expr);
+            return total - amountRemoved;
+        }
+    }
+
+    class InvariantCounter : SimpCounter
+    {
+        public InvariantCounter(LogData logData) : base(logData) {}
+
+        public override int GetCountBefore()
+        {
+            return logData.OriginalDaryController.Invariants.Count;
+        }
+
+        public override int GetCountAfter()
+        {
+            return logData.ModifiedDaryController.Invariants.Count;
+        }
+
+        public override int GetRemovedCount()
+        {
+            return logData.SimpData.RemovableInvariants.Count;
+        }
+
+        public override int GetNumberOfRemainingThatCanBeSimplified()
+        {
+            return logData.SimpData.SimplifiedInvariants.Count;
+        }
+
+        public override int GetNumberOfSubexpressionsAfterRemoval()
+        {
+            var amount = 0;
+            var daryControllerOriginal = logData.OriginalDaryController;
+
+            var allOriginalInvariants = new List<MaybeFreeExpression>();
+            foreach (var invariantWrap in daryControllerOriginal.Invariants) {
+                allOriginalInvariants.Add(invariantWrap.Removable);
             }
-            if (_runTimeTests) {
-                averageExecutionTime /= _numberOfTests;
-                averageTimeBefore /= _numberOfTests;
-                averageTimeAfter /= _numberOfTests;
+
+            var totalSubExprsCount = CountSubexpressions(allOriginalInvariants);
+            var removedSubExprsCount = CountSubexpressions(logData.SimpData.RemovableInvariants);
+
+            amount = totalSubExprsCount - removedSubExprsCount;
+            return amount;
+        }
+
+        private int CountSubexpressions(List<MaybeFreeExpression> allOriginalInvariants)
+        {
+            var amount = 0;
+            foreach (var invariant in allOriginalInvariants)
+                amount += CountExpr(invariant.E);
+            return amount;
+        }
+
+        public override int GetNumberOfSubexpressionsAfterSimplification()
+        {
+            var amountRemoved = 0;
+            var total = GetNumberOfSubexpressionsAfterRemoval();
+            foreach (var tup in logData.SimpData.SimplifiedInvariants) 
+                amountRemoved += CountExpr(tup.Item1.E) - CountExpr(tup.Item2.E);
+            return total - amountRemoved;
+        }
+    }
+
+    class DecreasesCounter : Counter
+    {
+        public DecreasesCounter(LogData logData) : base(logData) {}
+
+        public override int GetCountBefore()
+        {
+            return logData.OriginalDaryController.Decreases.Count;
+        }
+
+        public override int GetCountAfter()
+        {
+            return logData.ModifiedDaryController.Decreases.Count;
+        }
+
+        public override int GetRemovedCount()
+        {
+            return logData.SimpData.RemovableDecreases.Count;
+        }
+    }
+
+    class LemmaCallCounter : Counter
+    {
+        public override int GetCountBefore()
+        {
+            return logData.OriginalDaryController.LemmaCalls.Count;
+        }
+
+        public override int GetCountAfter()
+        {
+            return logData.ModifiedDaryController.LemmaCalls.Count;
+        }
+
+        public override int GetRemovedCount()
+        {
+            return logData.SimpData.RemovableLemmaCalls.Count;
+        }
+
+        public LemmaCallCounter(LogData logData) : base(logData) {}
+    }
+
+    internal class CalcStatementCounter : SimpCounter
+    {
+        public CalcStatementCounter(LogData logData) : base(logData) {}
+
+        public override int GetCountBefore()
+        {
+            return logData.OriginalDaryController.Calcs.Count;
+        }
+
+        public override int GetCountAfter()
+        {
+            return logData.ModifiedDaryController.Calcs.Count;
+        }
+
+        public override int GetRemovedCount()
+        {
+            return logData.SimpData.RemovableCalcs.Count;
+        }
+
+        public override int GetNumberOfRemainingThatCanBeSimplified()
+        {
+            var remaining = GetCountAfter();
+            return logData.SimpData.SimplifiedCalcs.Item4.Count ; 
+        }
+
+        public override int GetNumberOfSubexpressionsAfterRemoval()
+        {
+            //this is found by total subexpressions - removed subexpressions
+            var originalDaryController = logData.OriginalDaryController;
+            var calcs = new List<CalcStmt>();
+            foreach (var wrap in originalDaryController.Calcs) {
+                calcs.Add(wrap.Removable as CalcStmt);
             }
-            return new Tuple<string, int, int, float, float, float>(Program.Name, countBefore, countAfter, averageExecutionTime, averageTimeBefore, averageTimeAfter);
+            var originalSubexprsCount = CountCalcParts(calcs);
+
+            return originalSubexprsCount - CountCalcParts(logData.SimpData.RemovableCalcs);
+
         }
 
-        private Tuple<long, long, long, int, int> RunInitialTest()
+        public override int GetNumberOfSubexpressionsAfterSimplification()
         {
-            var programClone = SimpleCloner.CloneProgram(Program);
-            var daryController = new DaryController(programClone);
-            var countBefore = GetCount(daryController);
-            var data = new Tuple<long, long, long>(0, 0, 0);
-            if (_runTimeTests)
-                data = RunTest(daryController);
-            else
-                GetRemovedItemsCount(daryController);
-            var countAfter = GetCount(daryController);
-            if (!daryController.IsProgramValid()) {
-//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\shotied\\short-"+daryController.Program.Name)) {
-//                    daryController.PrintProgram(writer);
-//                }
-                throw new Exception("Program not valid after initial test!");
-
-            }
-            return new Tuple<long, long, long, int, int>(data.Item1, data.Item2, data.Item3, countBefore, countAfter);
+            var daryController = logData.ModifiedDaryController;
+            var calcs = new List<CalcStmt>();
+            foreach (var wrap in daryController.Calcs)
+                calcs.Add(wrap.Removable as CalcStmt);
+            return CountCalcParts(calcs);
         }
 
-        /// <summary>
-        /// </summary>
-        /// <returns>A tuple containing the execution time, the verification time before and the verification time after</returns>
-        private Tuple<long, long, long> RunTest(DaryController daryController)
-        {
-            var daryExecutionTimeStopwatch = new Stopwatch();
-            var verificationTimeBefore = GetVerificationTime(daryController);
-            daryExecutionTimeStopwatch.Start();
-            GetRemovedItemsCount(daryController);
-            daryExecutionTimeStopwatch.Stop();
-            var verificationTimeAfter = GetVerificationTime(daryController);
-            return new Tuple<long, long, long>(daryExecutionTimeStopwatch.ElapsedMilliseconds, verificationTimeBefore, verificationTimeAfter);
-        }
-
-        private long GetVerificationTime(DaryController daryController)
-        {
-            Bpl.CommandLineOptions.Clo.VerifySnapshots = 0;
-            var watch = new Stopwatch();
-            watch.Start();
-            if (!daryController.IsProgramValid()) {
-//                using (TextWriter writer = File.CreateText("H:\\dafny\\programs\\Shortied\\short-" + daryController.Program.Name)) {
-//                    daryController.PrintProgram(writer);
-//                }
-                throw new Exception("Cannot find verification time as program is not valid!");
-            }
-            watch.Stop();
-            Bpl.CommandLineOptions.Clo.VerifySnapshots = 1;
-            return watch.ElapsedMilliseconds;
-        }
-
-        public abstract int GetRemovedItemsCount(DaryController daryController);
-
-        public abstract int GetCount(DaryController daryController);
-    }
-
-    internal class AssertLogFinder : LogFinder
-    {
-        public AssertLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
-
-        public override int GetRemovedItemsCount(DaryController daryController)
-        {
-            return daryController.FindRemovableAsserts().Count;
-        }
-
-        public override int GetCount(DaryController daryController)
-        {
-            return daryController.Asserts.Count;
-        }
-    }
-
-    internal class InvariantLogFinder : LogFinder
-    {
-        public InvariantLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
-
-        public override int GetRemovedItemsCount(DaryController daryController)
-        {
-            return daryController.FindRemovableInvariants().Count;
-        }
-
-        public override int GetCount(DaryController daryController)
-        {
-            return daryController.Invariants.Count;
-        }
-    }
-
-    internal class DecreasesLogFinder : LogFinder
-    {
-        public DecreasesLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
-
-        public override int GetRemovedItemsCount(DaryController daryController)
-        {
-            return daryController.FindRemovableDecreases().Count;
-        }
-
-        public override int GetCount(DaryController daryController)
-        {
-            return daryController.Decreases.Count + daryController.DecreasesWildCards.Sum(wildCardDecreases => wildCardDecreases.Count);
-        }
-    }
-
-    internal class LemmaCallLogFinder : LogFinder
-    {
-        public LemmaCallLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
-
-        public override int GetRemovedItemsCount(DaryController daryController)
-        {
-            return daryController.FindRemovableLemmaCalls().Count;
-        }
-
-        public override int GetCount(DaryController daryController)
-        {
-            return daryController.LemmaCalls.Count;
-        }
-    }
-
-    internal class CalcLogFinder : LogFinder
-    {
-        public CalcLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
-
-        public override int GetRemovedItemsCount(DaryController daryController)
-        {
-            var data = daryController.FindRemovableCalcs();
-            return data.Item1.Count + data.Item2.Count;
-        }
-
-        public override int GetCount(DaryController daryController)
+        private int CountCalcParts(List<CalcStmt> calcs)
         {
             var calcPartCount = 0;
-            foreach (var calcWrap in daryController.Calcs) {
-                var calcStmt = (CalcStmt) calcWrap.Removable;
+            foreach (var calcStmt in calcs) {
                 calcPartCount += calcStmt.Hints.Count(hint => hint.Body.Count > 0);
                 calcPartCount += calcStmt.Lines.Count - 1; // -1 because of the dummy
             }
@@ -530,116 +579,53 @@ namespace DaryTools
         }
     }
 
-    internal abstract class SimpLogFinder : LogFinder
+    #endregion
+
+    #region Counter Factories
+
+    interface ICounterFactory
     {
-        public SimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
+        Counter GetNewCounter(LogData logData);
+    }
 
-        protected abstract void RemoveAllOfType(DaryController daryController);
-
-        protected abstract void Simplify(DaryController daryController);
-
-        protected abstract int CountSubExprsFromItems(DaryController daryController);
-
-        public override int GetRemovedItemsCount(DaryController daryController)
+    class AssertCounterFactory : ICounterFactory
+    {
+        public Counter GetNewCounter(LogData logData)
         {
-            RemoveAllOfType(daryController); //we do not want theese here - this will take a bit of time but is needed for accurate results
-            var initialAmount = CountSubExprsFromItems(daryController);
-            Simplify(daryController);
-            var after = CountSubExprsFromItems(daryController);
-            var amount = initialAmount - after;
-            return amount;
-        }
-
-        public int CountExpr(Expression expr)
-        {
-            var binExpr = expr as BinaryExpr;
-            if (binExpr == null || binExpr.Op != BinaryExpr.Opcode.And) return 1;
-            return CountExpr(binExpr.E0) + CountExpr(binExpr.E1);
-        }
-
-        public override int GetCount(DaryController daryController)
-        {
-            RemoveAllOfType(daryController);
-            return CountSubExprsFromItems(daryController);
+            return new AssertCounter(logData);
         }
     }
 
-    internal class AssertSimpLogFinder : SimpLogFinder
+    class InvariantCounterFactory : ICounterFactory
     {
-        public AssertSimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
-
-        protected override void RemoveAllOfType(DaryController daryController)
+        public Counter GetNewCounter(LogData logData)
         {
-            daryController.FindRemovableAsserts();
-        }
-
-        protected override int CountSubExprsFromItems(DaryController daryController)
-        {
-            var amount = 0;
-            foreach (var wrap in daryController.Asserts) {
-                var assert = (AssertStmt) wrap.Removable;
-                if (assert == null) continue;
-                amount += CountExpr(assert.Expr);
-            }
-            return amount;
-        }
-
-        protected override void Simplify(DaryController daryController)
-        {
-            daryController.GetSimplifiedAsserts();
+            return new InvariantCounter(logData);
         }
     }
 
-    internal class InvariantSimpLogFinder : SimpLogFinder
+    class DecreasesCounterFactory : ICounterFactory
     {
-        public InvariantSimpLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
-
-        protected override void RemoveAllOfType(DaryController daryController)
+        public Counter GetNewCounter(LogData logData)
         {
-            daryController.FindRemovableInvariants();
-        }
-
-        protected override void Simplify(DaryController daryController)
-        {
-            daryController.GetSimplifiedInvariants();
-        }
-
-        protected override int CountSubExprsFromItems(DaryController daryController)
-        {
-            var amount = 0;
-            foreach (var wrap in daryController.Invariants) {
-                var invariant = wrap.Removable;
-                if (invariant == null) continue;
-                amount += CountExpr(invariant.E);
-            }
-            return amount;
+            return new DecreasesCounter(logData);
         }
     }
-
-    internal class EverythingLogFinder : LogFinder
+    class LemmaCallCounterFactory : ICounterFactory
     {
-        public EverythingLogFinder(Program program, int numberOfTests, bool runTimeTest) : base(program, numberOfTests, runTimeTest) {}
-
-        public override int GetRemovedItemsCount(DaryController daryController)
+        public Counter GetNewCounter(LogData logData)
         {
-            var amount = 0;
-            amount += daryController.FindRemovableAsserts().Count;
-            amount += daryController.FindRemovableInvariants().Count;
-            amount += daryController.FindRemovableDecreases().Count;
-            amount += daryController.FindRemovableLemmaCalls().Count;
-            amount += daryController.FindRemovableCalcs().Item1.Count;
-            amount += daryController.GetSimplifiedAsserts().Count;
-            amount += daryController.GetSimplifiedInvariants().Count;
-//            return amount;
-            return 0;
-
+            return new LemmaCallCounter(logData);
         }
-
-        public override int GetCount(DaryController daryController)
+    }
+    class CalcCounterFactory : ICounterFactory
+    {
+        public Counter GetNewCounter(LogData logData)
         {
-            return 0;
+            return new CalcStatementCounter(logData);
         }
     }
 
     #endregion
+
 }
