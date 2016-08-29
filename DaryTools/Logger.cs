@@ -21,7 +21,7 @@ namespace DaryTools
         private readonly int _numberOfTests;
         private readonly bool _runTimeTests;
         private readonly string _directory;
-        List<LogData> _allLoggedData = new List<LogData>();
+        private readonly List<LogData> _allLoggedData = new List<LogData>();
 
         public Logger(string directory, List<Program> programs, int numberOfTest, bool runTimeTests = true)
         {
@@ -103,7 +103,12 @@ namespace DaryTools
 
             Console.WriteLine("\nThe following programs failed: ");
             foreach (var failed in fails.Keys) {
-                Console.WriteLine(failed.Name + ": " + fails[failed].Message);
+                try {
+                    Console.WriteLine(failed.Name + ": " + fails[failed].Message);
+                }
+                catch {
+                    Console.WriteLine(failed.Name + ": unable to print error...");
+                }
             }
             
             LogFile("assert-removal", "Asserts", new AssertCounterFactory());
@@ -111,16 +116,7 @@ namespace DaryTools
             LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallCounterFactory());
             LogFile("decreases-removal", "Decreases", new DecreasesCounterFactory());
             LogFile("calc-removal", "Calcs", new CalcCounterFactory());
-
-            
-
             LogSummaryData();
-
-//            if(_runTimeTests)
-//                LogFile("everything-removal", "", new EverythingLogFinderFactory()); //This will not actually count anything as the information will not be entirely useful (e.g. does a part of an assert count as much as an assert?)
-
-
-
         }
 
         private void LogSummaryData()
@@ -190,8 +186,6 @@ namespace DaryTools
                     isSimp = true;
                 
                 WriteHeadings(tw, itemsName, isSimp);
-                var count = 1;
-
 
                 var totalBefore = 0;
                 var totalAfter = 0;
@@ -284,12 +278,16 @@ namespace DaryTools
             var beforeFileName = directoryName + "\\" + plainFileName + "-before.dfy";
             var afterFileName = directoryName + "\\" + plainFileName + "-after.dfy";
 
-            using (TextWriter tw = File.CreateText(beforeFileName))
-                OriginalDaryController.PrintProgram(tw);
+            try {
+                using (TextWriter tw = File.CreateText(beforeFileName))
+                    OriginalDaryController.PrintProgram(tw);
 
-            using (TextWriter tw = File.CreateText(afterFileName))
-                ModifiedDaryController.PrintProgram(tw);
-            
+                using (TextWriter tw = File.CreateText(afterFileName))
+                    ModifiedDaryController.PrintProgram(tw);
+            }
+            catch {
+                Console.WriteLine("Unable to print "+ OriginalProgram.Name);
+            }
             var lineCountBefore = File.ReadLines(beforeFileName).Count();
             var lineCountAfter = File.ReadLines(afterFileName).Count();
 

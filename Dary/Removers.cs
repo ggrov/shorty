@@ -980,7 +980,6 @@ namespace Dary
         
         public void FailureOccured()
         {
-            if(_calcStmt.Tok.line == 63)
             if (_dealtWithError) {
                 return;
             }
