@@ -86,14 +86,25 @@ namespace DaryTools
             }
 
             var programNumber = 0;
-            
+
+            var fails = new Dictionary<Program, Exception>();
+
             foreach (var program in Programs) {
-                var logData = _runTimeTests ? new LogData(program, _numberOfTests) : new LogData(program);
-                Console.WriteLine("Getting data for {0} ({1}/{2})", program.Name, ++programNumber, Programs.Count);
-                logData.PerformLogging();
-                _allLoggedData.Add(logData);
+                try {
+                    var logData = _runTimeTests ? new LogData(program, _numberOfTests) : new LogData(program);
+                    Console.WriteLine("Getting data for {0} ({1}/{2})", program.Name, ++programNumber, Programs.Count);
+                    logData.PerformLogging();
+                    _allLoggedData.Add(logData);
+                }
+                catch (Exception e){
+                    fails.Add(program, e);
+                }
             }
 
+            Console.WriteLine("\nThe following programs failed: ");
+            foreach (var failed in fails.Keys) {
+                Console.WriteLine(failed.Name + ": " + fails[failed].Message);
+            }
             
             LogFile("assert-removal", "Asserts", new AssertCounterFactory());
             LogFile("invariant-removal", "Invariants", new InvariantCounterFactory());

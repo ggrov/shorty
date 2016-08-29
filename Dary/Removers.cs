@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Diagnostics.Contracts;
+using System.IO;
 using System.Linq;
+using System.Runtime.Remoting.Messaging;
 using Microsoft.Boogie;
 using Microsoft.Dafny;
 using Function = Microsoft.Dafny.Function;
@@ -745,10 +747,12 @@ namespace Dary
         public List<SimplificationItemInMethod> Brokenitems { get; private set; }
         public List<SimplificationItemInMethod> RequiredItems { get; private set; }
         public SimplificationItemInMethod OriginalItem { get; private set; }
+        public SimplificationItemInMethod NewItem { get; private set; }
         private readonly MemberDecl _member;
         public bool Ignore { get; private set; }
         public bool Finished { get; private set; }
 
+        //TODO: resinsert the new item into the program and remove the broken items
         public ConjunctionData(MemberDecl member, SimplificationItemInMethod item)
         {
             OriginalItem = item;
@@ -825,6 +829,26 @@ namespace Dary
             else 
                 throw new UnableToDetermineTypeException();
         }
+
+        public void CombineRequiredSubexpressions()
+        {
+            var originalWrap = OriginalItem.GetItem();
+            if (originalWrap is Wrap<Statement>) {
+                var brokenItems = Brokenitems.Select(brokenItem => brokenItem.GetItem() as Wrap<Statement>).ToList();
+                var newWrap = Simplifier.CombineToNewWrap(originalWrap as Wrap<Statement>, brokenItems);
+                NewItem = new SimplificationItemInMethod(_member, newWrap);
+            }
+            else if (originalWrap is Wrap<MaybeFreeExpression>) {
+                var brokenItems =
+                    Brokenitems.Select(brokenItem => brokenItem.GetItem() as Wrap<MaybeFreeExpression>).ToList();
+                var newWrap = Simplifier.CombineToNewWrap(originalWrap as Wrap<MaybeFreeExpression>, brokenItems);
+                NewItem = new SimplificationItemInMethod(_member, newWrap);
+            }
+            else throw new UnableToDetermineTypeException();
+//            originalWrap.Remove();
+//            newWrap.Reinsert();
+//            return new Tuple<T, T>(originalWrap.Removable, newWrap.Removable);
+        }
     }
 
     internal class RemovableCalcParts //TODO: use this more
@@ -858,6 +882,13 @@ namespace Dary
         private List<Statement> _lastHintBody;
 
         private bool _linesComplete = false;
+        private bool _dealtWithError = false;
+
+        private int TokLine {
+            get {
+                return _calcStmt.Tok.line;
+            }
+        }
 
         public CalcData(CalcStmt calcStmt)
         {
@@ -868,6 +899,7 @@ namespace Dary
 
         public void RemoveNext()
         {
+            _dealtWithError = false;
             GatherRemovableParts();
             if (!_linesComplete)
                 RemoveNextLineAndHint();
@@ -887,7 +919,7 @@ namespace Dary
             if (_lastRemovedLine != null && _lastRemovedHint != null && _lastRemovedCalcOp != null) {
                 _hintIndex = 0;
             }
-
+            //bug: there are cases where an item could be removed but it would require combining two hints (e.g. ACL2-extractor.dfy line 63) - a way to undo this would also be needed
             _lastRemovedLine = _calcStmt.Lines[_lineIndex];
             _lastRemovedHint = _calcStmt.Hints[_hintIndex];
             _lastRemovedCalcOp = _calcStmt.StepOps[_hintIndex];
@@ -921,8 +953,9 @@ namespace Dary
 
         private void EmptyNextHint()
         {
-            if (_hintIndex >= _calcStmt.Hints.Count - 2)
+            if (_hintIndex >= _calcStmt.Hints.Count - 2) {
                 Finished = true;
+            }
             else if (_calcStmt.Hints[_hintIndex].Body.Count == 0) {
                 _hintIndex++;
                 EmptyNextHint();
@@ -944,13 +977,20 @@ namespace Dary
                 body.RemoveAt(0);
             }
         }
-
+        
         public void FailureOccured()
         {
-            if (!_linesComplete) 
+            if(_calcStmt.Tok.line == 63)
+            if (_dealtWithError) {
+                return;
+            }
+            _dealtWithError = true;
+            if (!_linesComplete) {
                 ReinsertLastLineAndHint();
-            else 
+            }
+            else {
                 RefillLastHintBody();
+            }
         }
 
         private void ReinsertLastLineAndHint()
@@ -980,7 +1020,7 @@ namespace Dary
         private void RefillLastHintBody()
         {
             foreach (var statement in _lastHintBody)
-                _calcStmt.Hints[_hintIndex].Body.Add(statement);
+                _calcStmt.Hints[_hintIndex-1].Body.Add(statement);
 
             _lastHintBody = null;
         }
@@ -1172,24 +1212,17 @@ namespace Dary
         {
             var originalItem = conjunctionData.OriginalItem;
             var requiredItems = conjunctionData.RequiredItems;
+            conjunctionData.CombineRequiredSubexpressions();
             if (requiredItems.Count == 0 || requiredItems.Count == conjunctionData.Brokenitems.Count) return;
             var originalWrap = originalItem.GetItem();
             if (originalWrap is Wrap<Statement>)
-                simpData.SimplifiedAsserts.Add(CombineRequiredSubexpressions(originalWrap as Wrap<Statement>, requiredItems));
+                simpData.SimplifiedAsserts.Add(new Tuple<Statement, Statement>((conjunctionData.OriginalItem.GetItem() as Wrap<Statement>).Removable, (conjunctionData.NewItem.GetItem() as Wrap<Statement>).Removable));
             else if (originalWrap is Wrap<MaybeFreeExpression>)
-                simpData.SimplifiedInvariants.Add(CombineRequiredSubexpressions(originalWrap as Wrap<MaybeFreeExpression>, requiredItems));
+                simpData.SimplifiedInvariants.Add(new Tuple<MaybeFreeExpression, MaybeFreeExpression>((conjunctionData.OriginalItem.GetItem() as Wrap<MaybeFreeExpression>).Removable, (conjunctionData.NewItem.GetItem() as Wrap<MaybeFreeExpression>).Removable));
+
         }
 
-        private static Tuple<T,T> CombineRequiredSubexpressions<T>(Wrap<T> originalWrap,List<SimplificationItemInMethod> requiredItems)
-        {
-            var brokenItemWraps = requiredItems.Select(requiredItem => requiredItem.GetItem() as Wrap<T>).ToList();
-            foreach (var brokenItemWrap in brokenItemWraps)
-                brokenItemWrap.Remove();
-            var newWrap = Simplifier.CombineToNewWrap(originalWrap, brokenItemWraps);
-            originalWrap.Remove();
-            newWrap.Reinsert();
-            return new Tuple<T, T>(originalWrap.Removable, newWrap.Removable);
-        }
+
 
         private bool RemoveAnItemFromEachMethod(Dictionary<MemberDecl, List<SimplificationItemInMethod>> simpItems)
         {
