@@ -1,16 +1,12 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using DaryTools;
 using Microsoft.Dafny;
-using Dary;
+using Dare;
 
 
-namespace DaryTools
+namespace DareTools
 {
     class TimeComparers
     {
@@ -70,13 +66,13 @@ namespace DaryTools
         private TimeResults Compare()
         {
             var ooatProgram = SimpleCloner.CloneProgram(_program);
-            var oaat = new DaryController(ooatProgram, new OneAtATimeRemover(ooatProgram));
+            var oaat = new DareController(ooatProgram, new OneAtATimeRemover(ooatProgram));
 
             var simulProgram = SimpleCloner.CloneProgram(_program);
-            var simul = new DaryController(simulProgram, new SimultaneousMethodRemover(simulProgram));
+            var simul = new DareController(simulProgram, new SimultaneousMethodRemover(simulProgram));
 
             var allTypeProgram = SimpleCloner.CloneProgram(_program);
-            var allType = new DaryController(allTypeProgram);
+            var allType = new DareController(allTypeProgram);
 
             TimeResults timeResults = new TimeResults();
 
@@ -92,18 +88,18 @@ namespace DaryTools
             return timeResults;
         }
 
-        private long GetRemovalTime(DaryController daryController)
+        private long GetRemovalTime(DareController dareController)
         {
             var stopwatch = new Stopwatch();
             stopwatch.Start();
 
-            daryController.FindRemovableAsserts();
-            daryController.FindRemovableInvariants();
-            daryController.FindRemovableDecreases();
-            daryController.FindRemovableLemmaCalls();
-            daryController.GetSimplifiedAsserts();
-            daryController.GetSimplifiedInvariants();
-            daryController.FindRemovableCalcs();
+            dareController.FindRemovableAsserts();
+            dareController.FindRemovableInvariants();
+            dareController.FindRemovableDecreases();
+            dareController.FindRemovableLemmaCalls();
+            dareController.GetSimplifiedAsserts();
+            dareController.GetSimplifiedInvariants();
+            dareController.FindRemovableCalcs();
 
             stopwatch.Stop();
             return stopwatch.ElapsedMilliseconds;

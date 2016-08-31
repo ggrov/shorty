@@ -7,8 +7,8 @@
     <ProjectGuid>{6A79A7B0-613F-4576-9325-E4234C2ACF17}</ProjectGuid>
     <OutputType>Exe</OutputType>
     <AppDesignerFolder>Properties</AppDesignerFolder>
-    <RootNamespace>DaryTools</RootNamespace>
-    <AssemblyName>DaryTools</AssemblyName>
+    <RootNamespace>DareTools</RootNamespace>
+    <AssemblyName>DareTools</AssemblyName>
     <TargetFrameworkVersion>v4.5</TargetFrameworkVersion>
     <FileAlignment>512</FileAlignment>
   </PropertyGroup>
@@ -75,7 +75,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="DaryMain.cs" />
+    <Compile Include="DareMain.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="RemovalOrderTester.cs" />
@@ -89,9 +89,9 @@
     <None Include="packages.config" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\Dary\Dary.csproj">
+    <ProjectReference Include="..\Dare\Dare.csproj">
       <Project>{a32baa1c-7640-4022-bcd5-117c2275b5a4}</Project>
-      <Name>Dary</Name>
+      <Name>Dare</Name>
     </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

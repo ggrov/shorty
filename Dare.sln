@@ -1,9 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 2012
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Dary", "Dary\Dary.csproj", "{A32BAA1C-7640-4022-BCD5-117C2275B5A4}"
-EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DaryTools", "DaryTools\DaryTools.csproj", "{6A79A7B0-613F-4576-9325-E4234C2ACF17}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DareTools", "DareTools\DareTools.csproj", "{6A79A7B0-613F-4576-9325-E4234C2ACF17}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
