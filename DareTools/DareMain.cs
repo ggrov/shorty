@@ -6,6 +6,7 @@ using System.Linq;
 using Microsoft.Dafny;
 using Bpl = Microsoft.Boogie;
 using Dare;
+using DareSim = Dare.Dare;
 
 namespace DareTools
 {
@@ -24,7 +25,7 @@ namespace DareTools
             var dafnyPrograms = GetPrograms(args);
             if (dafnyPrograms == null) return;
 
-            Console.WriteLine("1: simplify and print\n2: run logger\n3: run order testing\n4: Run Strategy Comparison");
+            Console.WriteLine("1: simplify and print\n2: run logger\n3: run order testing\n4: Run Strategy Comparison\n5: Simulate Process Program");
             var input = Console.ReadLine();
             var ans = GetInputAsInt(input);
 
@@ -45,11 +46,30 @@ namespace DareTools
                     CompareSearchStrategies(dafnyPrograms);
                     Console.WriteLine("\n\nComparison Completed");
                     break;
+                case 5:
+                    ProcessPrograms(dafnyPrograms);
+                    Console.WriteLine("\n\nProcess Completed Completed");
+                    break;
                 default:
                     Console.WriteLine("Invalid input: " + input);
                     break;
             }
             Console.ReadLine();
+        }
+
+        private static void ProcessPrograms(List<Program> dafnyPrograms)
+        {
+            SimpleVerifier verifier = new SimpleVerifier();
+            DareSim dare = new DareSim(new StopChecker());
+            foreach (var program in dafnyPrograms) {
+                dare.ProcessProgram(program);
+                using (TextWriter writer = File.CreateText(_outputDir + "\\processed-" + program.Name)) {
+                    PrintProgram(program, writer);
+                }
+                if (!verifier.IsProgramValid(program)) {
+                    throw new Exception("Program not valid after process");
+                }
+            }
         }
 
         private static int GetInputAsInt(string input)
@@ -229,15 +249,20 @@ namespace DareTools
             try {
                 var dareController = new DareController(program, new OneAtATimeRemover(program));
                 dareController.FastRemoveAllRemovables();
-                using (TextWriter writer = File.CreateText(_outputDir + "\\" + program.Name)) {
-                    dareController.PrintProgram(writer);
+
+                using (TextWriter writer = File.CreateText(_outputDir + "\\new-" + program.Name)) {
+                    PrintProgram(program, writer);
                 }
             }
             catch (Exception e) {
                 Console.WriteLine(e.Message);
             }
         }
+
+        private static void PrintProgram(Program program, TextWriter writer)
+        {
+                var dafnyPrinter = new Printer(writer);
+                dafnyPrinter.PrintProgram(program, false);
+        }
     }
-
-
 }

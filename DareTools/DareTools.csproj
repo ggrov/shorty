@@ -56,11 +56,13 @@
     <Reference Include="BoogieVCGeneration">
       <HintPath>..\..\tacny\boogie\Binaries\BoogieVCGeneration.dll</HintPath>
     </Reference>
-    <Reference Include="Dafny">
-      <HintPath>..\..\tacny\dafny\Binaries\Dafny.exe</HintPath>
+    <Reference Include="DafnyPipeline, Version=1.9.7.30401, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\tacny\new-dafny\Binaries\DafnyPipeline.dll</HintPath>
     </Reference>
-    <Reference Include="DafnyPipeline">
-      <HintPath>..\..\tacny\dafny\Binaries\DafnyPipeline.dll</HintPath>
+    <Reference Include="Dare, Version=1.0.0.0, Culture=neutral, PublicKeyToken=736440c9b414ea16, processorArchitecture=MSIL">
+      <SpecificVersion>False</SpecificVersion>
+      <HintPath>..\..\tacny\new-dafny\Binaries\Dare.dll</HintPath>
     </Reference>
     <Reference Include="nunit.framework, Version=3.4.1.0, Culture=neutral, PublicKeyToken=2638cd05610744eb, processorArchitecture=MSIL">
       <HintPath>..\packages\NUnit.3.4.1\lib\net45\nunit.framework.dll</HintPath>
@@ -87,12 +89,6 @@
   <ItemGroup>
     <None Include="App.config" />
     <None Include="packages.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\Dare\Dare.csproj">
-      <Project>{a32baa1c-7640-4022-bcd5-117c2275b5a4}</Project>
-      <Name>Dare</Name>
-    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 
