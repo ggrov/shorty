@@ -69,6 +69,14 @@ namespace DareTools
                 if (!verifier.IsProgramValid(program)) {
                     throw new Exception("Program not valid after process");
                 }
+                var decls = program.DefaultModuleDef.TopLevelDecls;
+                var members = new List<MemberDecl>();
+                foreach (var topLevelDecl in decls) {
+                    var classDec = topLevelDecl as ClassDecl;
+                    if(classDec==null) continue;
+                    members.AddRange(classDec.Members);
+                }
+                dare.ProcessMembers(program, members);
             }
         }
 
