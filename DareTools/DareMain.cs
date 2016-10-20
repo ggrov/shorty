@@ -110,6 +110,7 @@ namespace DareTools
                 Console.WriteLine("Filename: " + fileName);
                 dafnyPrograms.Add(CreateProgramFromFileName(fileName));
             }
+            Console.WriteLine("Loaded {0} programs",dafnyPrograms.Count);
             return dafnyPrograms;
         }
 
@@ -156,17 +157,64 @@ namespace DareTools
             Contract.ContractFailed += ContractFailureHandler;
         }
         
-        public static void RunLogger(List<Program> programs)
-        {
-            var logger = new Logger(_outputDir, programs, 1, false);
+        public static void RunLogger(List<Program> programs) {
+            var testExecTimes = GetTestExecTimes();
+            var numTimes = 1;
+            if (testExecTimes)
+                numTimes = GetNumTimes();
+
+            var logger = new Logger(_outputDir, programs, numTimes, testExecTimes);
             logger.LogAllData();
         }
 
-        public static void CompareSearchStrategies(List<Program> programs)
-        {
+        private static bool GetTestExecTimes() {
+            bool testExecTimes;
+            Console.WriteLine("Would you like to test verification times?(y/n)");
+            var ans = Console.ReadLine();
+            switch (ans) {
+                case "y":
+                case "Y":
+                    testExecTimes = true;
+                    break;
+                case "n":
+                case "N":
+                    testExecTimes = false;
+                    break;
+                default:
+                    Console.WriteLine("Invalid input, please enter y or n");
+                    return GetTestExecTimes();
+            }
+            return testExecTimes;
+        }
+
+        private static int GetNumTimes() {
+            Console.WriteLine("How many times would you like to run each program to analise verification time?");
+            try {
+                var numTimes = int.Parse(Console.ReadLine());
+                return numTimes;
+            }
+            catch {
+                Console.WriteLine("Input wasn't a valid integer number.");
+                return GetNumTimes();
+            }
+        }
+
+        public static void CompareSearchStrategies(List<Program> programs) {
+            var numOfRuns = GetNumRuns();
             using (TextWriter tw = File.CreateText(_outputDir+"\\SearchStrategyComparisons.csv")) {
-                TimeComparers timeComparers = new TimeComparers(programs, 1);
+                var timeComparers = new TimeComparers(programs, numOfRuns);
                 timeComparers.CompareTimes(tw);
+            }
+        }
+
+        private static int GetNumRuns() {
+            try {
+                Console.WriteLine("How many attempts do you want to average the times over?");
+                return int.Parse(Console.ReadLine());
+            }
+            catch {
+                Console.WriteLine("Input was invalid - please enter an integer");
+                return GetNumRuns();
             }
         }
 

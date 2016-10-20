@@ -11,7 +11,6 @@ using Dare;
 
 namespace DareTools
 {
-    //TODO: update to use SimultaneousAllTypeRemover
     internal class Logger
     {
         public readonly List<Program> Programs;
@@ -24,9 +23,8 @@ namespace DareTools
         public Logger(string directory, List<Program> programs, int numberOfTest, bool runTimeTests = true)
         {
             Contract.Requires(numberOfTest > 0);
-            if (numberOfTest > 1 && !runTimeTests) {
-                throw new Exception("not running time tests and having more than one testrun - there is literally no reason to ever do this");
-            }
+            if (numberOfTest > 1 && !runTimeTests) 
+                throw new Exception("not running time tests and having more than one testrun - there is no reason to ever do this");
             _directory = directory + "\\";
             _numberOfTests = numberOfTest;
             _runTimeTests = runTimeTests;
@@ -34,15 +32,19 @@ namespace DareTools
             EnsureProgramsVerify();
         }
 
-        private void EnsureProgramsVerify()
-        {
+        private void EnsureProgramsVerify() {
+            var totalCount = Programs.Count;
             for (var i = Programs.Count - 1; i >= 0; i--) {
                 var program = Programs[i];
-                if (EnsureProgramVerifies(program)) continue;
+                Console.Write("\nChecking {0} | {1}/{2}", program.FullName, totalCount - i, totalCount);
+                if (EnsureProgramVerifies(program)) {
+                    continue;
+                }
                 InvalidPrograms.Add(program);
-                Console.WriteLine("  => Program {0} is not valid", program.Name);
+                Console.Write("  => Program {0} is not valid", program.Name);
                 Programs.Remove(program);
             }
+            Console.WriteLine("\n\nFound {0} invalid programs.  Running Logger on remaining {1} programs", totalCount - Programs.Count, Programs.Count);
         }
 
         private bool EnsureProgramVerifies(Program program)
@@ -57,7 +59,6 @@ namespace DareTools
 
         private bool TryEnsureProgramVerifies(Program program)
         {
-            Console.WriteLine("Checking " + program.FullName);
             var copy = SimpleCloner.CloneProgram(program);
             var dareController = new DareController(copy);
             return dareController.IsProgramValid();
@@ -96,31 +97,37 @@ namespace DareTools
             LogFile("lemma-call-removal", "Lemma Calls", new LemmaCallCounterFactory());
             LogFile("decreases-removal", "Decreases", new DecreasesCounterFactory());
             LogFile("calc-removal", "Calcs", new CalcCounterFactory());
+            LogFile("wildcard-removal", "Wildcard", new WildCardCounterFactory());
             LogSummaryData();
         }
 
         private void CheckValidityOfPrograms()
         {
             using (TextWriter tw = File.CreateText(_directory + "\\summary.txt")) {
-                tw.WriteLine("Logging data for {0} programs", Programs.Count);
-                if (InvalidPrograms.Count > 0) {
-                    tw.WriteLine("\nThe following programs failed initial verification");
-                    foreach (var program in InvalidPrograms)
-                        tw.WriteLine(program.FullName);
-                }
+                tw.WriteLine("Logging data for {0} programs out of an original {1}", Programs.Count, Programs.Count + InvalidPrograms.Count);
+                if (InvalidPrograms.Count <= 0) return;
+                tw.WriteLine("\nThe following {0} programs failed initial verification", InvalidPrograms.Count);
+                foreach (var program in InvalidPrograms)
+                    tw.WriteLine(program.FullName);
             }
         }
 
-        private static void PrintFails(Dictionary<Program, Exception> fails)
+        private void PrintFails(Dictionary<Program, Exception> fails)
         {
             if (fails.Count <= 0) return;
             Console.WriteLine("\nThe following programs failed: ");
-            foreach (var failed in fails.Keys) {
-                try {
-                    Console.WriteLine(failed.Name + ": " + fails[failed].Message);
-                }
-                catch {
-                    Console.WriteLine(failed.Name + ": unable to print error...");
+            using (TextWriter tw = File.CreateText(Path.Combine(_directory, "failed-programs.txt"))) {
+                foreach (var failed in fails.Keys) {
+                    try {
+                        var msg = failed.Name + ": " + fails[failed].Message;
+                        Console.WriteLine(msg);
+                        tw.WriteLine(msg);
+                    }
+                    catch {
+                        var msg = failed.Name + ": unable to print error...";
+                        Console.WriteLine(msg);
+                        tw.WriteLine(msg);
+                    }
                 }
             }
         }
@@ -131,7 +138,7 @@ namespace DareTools
             foreach (var logData in _allLoggedData) 
                 beforeAndAfterLineCounts.Add(logData, logData.PrintBeforeAndAfter(_directory));
 
-            using (TextWriter tw = File.CreateText(_directory + "\\summartData.csv")) {
+            using (TextWriter tw = File.CreateText(_directory + "\\summaryData.csv")) {
                 tw.Write("Program name, loc before, loc after, loc removed");
                 var totalLocBefore = 0;
                 var totalLocAfter = 0;
@@ -148,7 +155,7 @@ namespace DareTools
                     totalLocAfter += locAfter;
                     tw.Write("{0},{1},{2},{3}", logData.OriginalProgram.Name, locBefore, locAfter, locBefore-locAfter);
                     if (_runTimeTests) {
-                        tw.WriteLine("{0},{1},{2}",logData.VerificationTimeBefore, logData.VerificationTimeAfter, logData.VerificationTimeBefore - logData.VerificationTimeAfter);
+                        tw.WriteLine(",{0},{1},{2}",logData.VerificationTimeBefore, logData.VerificationTimeAfter, logData.VerificationTimeBefore - logData.VerificationTimeAfter);
                         totalVerTimeBefore += logData.VerificationTimeBefore;
                         totalVerTimeAfter += logData.VerificationTimeAfter;
                     }
@@ -158,7 +165,7 @@ namespace DareTools
                 tw.WriteLine();
                 tw.Write("Total,{0},{1},{2}",totalLocBefore, totalLocAfter, totalLocBefore-totalLocAfter);
                 if (_runTimeTests)
-                    tw.WriteLine("{0},{1},{2}", totalVerTimeBefore, totalVerTimeAfter, totalVerTimeBefore - totalVerTimeAfter);
+                    tw.WriteLine(",{0},{1},{2}", totalVerTimeBefore, totalVerTimeAfter, totalVerTimeBefore - totalVerTimeAfter);
                 else
                     tw.WriteLine();
 
@@ -174,7 +181,7 @@ namespace DareTools
                     float avgVerTimeAfter = (float) ((float) totalVerTimeAfter/(float) _allLoggedData.Count);
                     float avgVerTimeImprovement = (float) ((float) totalVerTimeBefore - totalVerTimeAfter)/(float) _allLoggedData.Count;
 
-                    tw.WriteLine("{0},{1},{2}", avgVerTimeBefore, avgVerTimeAfter, avgVerTimeImprovement);
+                    tw.WriteLine(",{0},{1},{2}", avgVerTimeBefore, avgVerTimeAfter, avgVerTimeImprovement);
                 }
                 else
                     tw.WriteLine();
@@ -336,8 +343,9 @@ namespace DareTools
             var sw = new Stopwatch();
             var origSnapshotSetting = DafnyOptions.O.VerifySnapshots;
             DafnyOptions.O.VerifySnapshots = 0;
+            var programClone = SimpleCloner.CloneProgram(program);
             sw.Start();
-            verifier.IsProgramValid(program);
+            verifier.IsProgramValid(programClone);
             sw.Stop();
             DafnyOptions.O.VerifySnapshots = origSnapshotSetting;
             return sw.ElapsedMilliseconds;
@@ -348,11 +356,11 @@ namespace DareTools
     
     internal abstract class Counter {
         
-        protected LogData logData;
+        protected LogData LogData;
 
-        public Counter(LogData logData)
+        protected Counter(LogData logData)
         {
-            this.logData = logData;
+            LogData = logData;
         }
 
         public abstract int GetCountBefore();
@@ -380,22 +388,22 @@ namespace DareTools
 
         public override int GetCountBefore()
         {
-            return logData.OriginalDareController.Asserts.Count;
+            return LogData.OriginalDareController.Asserts.Count;
         }
 
         public override int GetCountAfter()
         {
-            return logData.ModifiedDareController.Asserts.Count;
+            return LogData.ModifiedDareController.Asserts.Count;
         }
 
         public override int GetRemovedCount()
         {
-            return logData.SimpData.RemovableAsserts.Count;
+            return LogData.SimpData.RemovableAsserts.Count;
         }
 
         public override int GetNumberOfRemainingThatCanBeSimplified()
         {
-            return logData.SimpData.SimplifiedAsserts.Count;
+            return LogData.SimpData.SimplifiedAsserts.Count;
         }
 
         public override int GetNumberOfSubexpressionsBeforeSimplification()
@@ -403,7 +411,7 @@ namespace DareTools
             var amount = 0;
             //As the final results will have already simplified, we count all the removed
             //subexpressions then subtract that from the total original subexpressions
-            var dareControllerOriginal = logData.OriginalDareController;
+            var dareControllerOriginal = LogData.OriginalDareController;
 
             //unwrap the original asserts
             var allOriginalAsserts = new List<AssertStmt>();
@@ -412,7 +420,7 @@ namespace DareTools
             }
 
             var totalSubExprsCount = CountSubexpressions(allOriginalAsserts);
-            var removedSubExprsCount = CountSubexpressions(logData.SimpData.RemovableAsserts);
+            var removedSubExprsCount = CountSubexpressions(LogData.SimpData.RemovableAsserts);
 
             amount = totalSubExprsCount - removedSubExprsCount;
             return amount;
@@ -430,7 +438,7 @@ namespace DareTools
         {
             var amountRemoved = 0;
             var total = GetNumberOfSubexpressionsBeforeSimplification();
-            foreach (var tup in logData.SimpData.SimplifiedAsserts)
+            foreach (var tup in LogData.SimpData.SimplifiedAsserts)
                 amountRemoved += CountExpr((tup.Item1 as AssertStmt).Expr) - CountExpr((tup.Item2 as AssertStmt).Expr);
             return total - amountRemoved;
         }
@@ -442,28 +450,28 @@ namespace DareTools
 
         public override int GetCountBefore()
         {
-            return logData.OriginalDareController.Invariants.Count;
+            return LogData.OriginalDareController.Invariants.Count;
         }
 
         public override int GetCountAfter()
         {
-            return logData.ModifiedDareController.Invariants.Count;
+            return LogData.ModifiedDareController.Invariants.Count;
         }
 
         public override int GetRemovedCount()
         {
-            return logData.SimpData.RemovableInvariants.Count;
+            return LogData.SimpData.RemovableInvariants.Count;
         }
 
         public override int GetNumberOfRemainingThatCanBeSimplified()
         {
-            return logData.SimpData.SimplifiedInvariants.Count;
+            return LogData.SimpData.SimplifiedInvariants.Count;
         }
 
         public override int GetNumberOfSubexpressionsBeforeSimplification()
         {
             var amount = 0;
-            var dareControllerOriginal = logData.OriginalDareController;
+            var dareControllerOriginal = LogData.OriginalDareController;
 
             var allOriginalInvariants = new List<MaybeFreeExpression>();
             foreach (var invariantWrap in dareControllerOriginal.Invariants) {
@@ -471,7 +479,7 @@ namespace DareTools
             }
 
             var totalSubExprsCount = CountSubexpressions(allOriginalInvariants);
-            var removedSubExprsCount = CountSubexpressions(logData.SimpData.RemovableInvariants);
+            var removedSubExprsCount = CountSubexpressions(LogData.SimpData.RemovableInvariants);
 
             amount = totalSubExprsCount - removedSubExprsCount;
             return amount;
@@ -489,7 +497,7 @@ namespace DareTools
         {
             var amountRemoved = 0;
             var total = GetNumberOfSubexpressionsBeforeSimplification();
-            foreach (var tup in logData.SimpData.SimplifiedInvariants) 
+            foreach (var tup in LogData.SimpData.SimplifiedInvariants) 
                 amountRemoved += CountExpr(tup.Item1.E) - CountExpr(tup.Item2.E);
             return total - amountRemoved;
         }
@@ -501,17 +509,18 @@ namespace DareTools
 
         public override int GetCountBefore()
         {
-            return logData.OriginalDareController.Decreases.Count;
+            return LogData.OriginalDareController.Decreases.Count;
         }
 
         public override int GetCountAfter()
         {
-            return logData.ModifiedDareController.Decreases.Count;
+            return LogData.ModifiedDareController.Decreases.Count;
         }
 
         public override int GetRemovedCount()
         {
-            return logData.SimpData.RemovableDecreases.Count;
+            //return LogData.SimpData.RemovableDecreases.Count; -- think this includes wildcards
+            return GetCountBefore() - GetCountAfter();
         }
     }
 
@@ -519,17 +528,17 @@ namespace DareTools
     {
         public override int GetCountBefore()
         {
-            return logData.OriginalDareController.LemmaCalls.Count;
+            return LogData.OriginalDareController.LemmaCalls.Count;
         }
 
         public override int GetCountAfter()
         {
-            return logData.ModifiedDareController.LemmaCalls.Count;
+            return LogData.ModifiedDareController.LemmaCalls.Count;
         }
 
         public override int GetRemovedCount()
         {
-            return logData.SimpData.RemovableLemmaCalls.Count;
+            return LogData.SimpData.RemovableLemmaCalls.Count;
         }
 
         public LemmaCallCounter(LogData logData) : base(logData) {}
@@ -541,42 +550,42 @@ namespace DareTools
 
         public override int GetCountBefore()
         {
-            return logData.OriginalDareController.Calcs.Count;
+            return LogData.OriginalDareController.Calcs.Count;
         }
 
         public override int GetCountAfter()
         {
-            return logData.ModifiedDareController.Calcs.Count;
+            return LogData.ModifiedDareController.Calcs.Count;
         }
 
         public override int GetRemovedCount()
         {
-            return logData.SimpData.RemovableCalcs.Count;
+            return LogData.SimpData.RemovableCalcs.Count;
         }
 
         public override int GetNumberOfRemainingThatCanBeSimplified()
         {
             var remaining = GetCountAfter();
-            return logData.SimpData.SimplifiedCalcs.Item4.Count ; 
+            return LogData.SimpData.SimplifiedCalcs.Item4.Count ; 
         }
 
         public override int GetNumberOfSubexpressionsBeforeSimplification()
         {
             //this is found by total subexpressions - removed subexpressions
-            var originalDareController = logData.OriginalDareController;
+            var originalDareController = LogData.OriginalDareController;
             var calcs = new List<CalcStmt>();
             foreach (var wrap in originalDareController.Calcs) {
                 calcs.Add(wrap.Removable as CalcStmt);
             }
             var originalSubexprsCount = CountCalcParts(calcs);
 
-            return originalSubexprsCount - CountCalcParts(logData.SimpData.RemovableCalcs);
+            return originalSubexprsCount - CountCalcParts(LogData.SimpData.RemovableCalcs);
 
         }
 
         public override int GetNumberOfSubexpressionsAfterSimplification()
         {
-            var dareController = logData.ModifiedDareController;
+            var dareController = LogData.ModifiedDareController;
             var calcs = new List<CalcStmt>();
             foreach (var wrap in dareController.Calcs)
                 calcs.Add(wrap.Removable as CalcStmt);
@@ -591,6 +600,38 @@ namespace DareTools
                 calcPartCount += calcStmt.Lines.Count - 1; // -1 because of the dummy
             }
             return calcPartCount;
+        }
+    }
+
+    class WildCardCounter : Counter
+    {
+        public WildCardCounter(LogData logData) : base(logData) {}
+        public override int GetCountBefore() {
+            var count = 0;
+            foreach (var wildCard in LogData.OriginalDareController.AllRemovableTypes.WildCardDecreaseses) {
+                count += wildCard.Count;
+            }
+            return count;
+        }
+
+        private int CountWildCards(WildCardDecreases wildCard) {
+            var count = 1; //1 is THIS wildcard
+            foreach (var subWildCard in wildCard.SubDecreases) {
+                count += CountWildCards(subWildCard);
+            }
+            return count;
+        }
+
+        public override int GetCountAfter() { //Not sure if tree is changed....
+            var count = 0;
+            foreach (var wildCard in LogData.OriginalDareController.AllRemovableTypes.WildCardDecreaseses) {
+                count += CountWildCards(wildCard);
+            }
+            return count;
+        }
+
+        public override int GetRemovedCount() {
+            return GetCountBefore() - GetCountAfter();
         }
     }
 
@@ -638,6 +679,13 @@ namespace DareTools
         public Counter GetNewCounter(LogData logData)
         {
             return new CalcStatementCounter(logData);
+        }
+    }
+
+    class WildCardCounterFactory : ICounterFactory
+    {
+        public Counter GetNewCounter(LogData logData) {
+            return new WildCardCounter(logData);
         }
     }
 
